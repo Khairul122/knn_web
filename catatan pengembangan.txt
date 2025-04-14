@@ -1,0 +1,19 @@
+Tabel data_pemeliharaan
+data_pemeliharaan
+id_data_pemeliharaan
+nama_penyulang
+ketogori (gardu dan sutm)
+pengukuran
+arrester
+grounding
+ultrasonic
+cover_isolasi
+pangkas
+tebang
+row_lain_lain
+jamperan
+kawat_terburai
+gangguan ( 1 = gangguan dan 0 = tidak ada gangguan)
+set_label (latih dan uji)
+
+clustering dengan kmeans untuk kolom ganggung 
