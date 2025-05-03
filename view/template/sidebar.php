@@ -6,9 +6,9 @@
         <span class="menu-title">Dashboard</span>
       </a>
 
-      <a class="nav-link" href="index.php?page=data-pemeliharaan">
+      <a class="nav-link" href="index.php?page=data-gardu">
         <i class="mdi mdi-grid-large menu-icon"></i>
-        <span class="menu-title">Data Pemeliharaan</span>
+        <span class="menu-title">Data Gardu</span>
       </a>
     </li>
   </ul>
