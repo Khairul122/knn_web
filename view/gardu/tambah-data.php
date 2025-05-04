@@ -13,7 +13,7 @@
                             <div class="card">
                                 <div class="card-body">
                                     <h4 class="card-title">Tambah Data Gardu</h4>
-                                    <form class="forms-sample" method="post" action="index.php?page=simpan-gardu">
+                                    <form action="index.php?page=simpan-manual-gardu" method="post">
                                         <div class="form-group">
                                             <label for="nama_penyulang">Nama Penyulang</label>
                                             <input type="text" class="form-control" id="nama_penyulang" name="nama_penyulang" placeholder="Nama Penyulang" required>

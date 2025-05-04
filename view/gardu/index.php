@@ -16,11 +16,11 @@
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <h4 class="card-title mb-0">Data Pemeliharaan Gardu</h4>
                                         <div>
-                                            <a href="index.php?page=tambah-gardu" class="btn btn-sm btn-primary">Tambah Data</a>
+                                            <a href="index.php?page=tambah-data-gardu" class="btn btn-sm btn-primary">Tambah Data</a>
                                             <a href="index.php?page=import-form-gardu" class="btn btn-sm btn-success">Import</a>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="row mb-3">
                                         <div class="col-md-6">
                                             <form action="" method="get" class="d-flex">
@@ -45,9 +45,9 @@
                                                 <div class="form-group mr-2 mb-0">
                                                     <select name="tahun" class="form-control form-control-sm">
                                                         <option value="">Semua Tahun</option>
-                                                        <?php 
+                                                        <?php
                                                         $tahunSekarang = date('Y');
-                                                        for($i = $tahunSekarang; $i >= $tahunSekarang - 5; $i--) { ?>
+                                                        for ($i = $tahunSekarang; $i >= $tahunSekarang - 5; $i--) { ?>
                                                             <option value="<?= $i ?>" <?= isset($_GET['tahun']) && $_GET['tahun'] == $i ? 'selected' : '' ?>><?= $i ?></option>
                                                         <?php } ?>
                                                     </select>
@@ -56,7 +56,7 @@
                                             </form>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="table-responsive">
                                         <table class="table table-bordered">
                                             <thead>
@@ -84,6 +84,7 @@
                                                     <th>Pemasangan Cover Isolasi</th>
                                                     <th>Pemasangan Penghalang Panjat</th>
                                                     <th>Alat Ultrasonik</th>
+                                                    <th>Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -115,6 +116,10 @@
                                                         <td><?= $gardu['pemasangan_cover_isolasi']; ?></td>
                                                         <td><?= $gardu['pemasangan_penghalang_panjat']; ?></td>
                                                         <td><?= $gardu['alat_ultrasonik']; ?></td>
+                                                        <td>
+                                                            <a href="index.php?page=edit-gardu&id=<?= $gardu['id_gardu']; ?>" class="btn btn-sm btn-warning">Edit</a>
+                                                            <a href="index.php?page=hapus-gardu&id=<?= $gardu['id_gardu']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Yakin ingin menghapus data ini?')">Hapus</a>
+                                                        </td>
                                                     </tr>
                                                 <?php } ?>
                                             </tbody>

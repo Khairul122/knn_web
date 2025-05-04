@@ -10,43 +10,49 @@ if (!isset($_SESSION['login']) && $page !== 'login') {
     header("Location: index.php?page=login");
     exit;
 }
-
-if ($page === 'login') {
-    include 'view/login.php';
-    exit;
+switch ($page) {
+    case 'login':
+        include 'view/login.php';
+        exit;
+    case 'logout':
+        session_destroy();
+        header("Location: index.php?page=login");
+        exit;
+    case 'home':
+        include 'view/home.php';
+        exit;
+    
+    // Gardu
+    case 'import-form-gardu':
+        include 'view/gardu/import-data.php';
+        exit;
+    case 'data-gardu':
+        include_once 'controller/GarduController.php';
+        $controller = new GarduController();
+        $controller->index();
+        exit;
+    case 'import-gardu-save':
+        include_once 'controller/GarduController.php';
+        $controller = new GarduController();
+        $controller->importGarduSave();
+        exit;
+    case 'tambah-data-gardu':
+        include_once 'controller/GarduController.php';
+        $controller = new GarduController();
+        $controller->tambahData($_POST);
+        exit;
+    case 'simpan-manual-gardu':
+        include 'controller/GarduController.php';
+        $controller = new GarduController();
+        $controller->simpanManual();
+        break;
+    case 'hapus-gardu':
+        include 'controller/GarduController.php';
+        $controller = new GarduController();
+        $controller->delete();
+        break;
 }
 
-if ($page === 'logout') {
-    session_destroy();
-    header("Location: index.php?page=login");
-    exit;
-}
-
-if ($page === 'home') {
-    include 'view/home.php';
-    exit;
-}
-
-if ($page === 'import-form-gardu') {
-    include 'view/gardu/import-data.php';
-    exit;
-}
-
-if ($page === 'data-gardu') {
-    include_once 'controller/GarduController.php';
-    $controller = new GarduController();
-    $controller->index();
-    exit;
-}
-
-if ($page === 'import-gardu-save') {
-    include_once 'controller/GarduController.php';
-    $controller = new GarduController();
-    $controller->importGarduSave();
-    exit;
-}
-
-// Routing dinamis: page=gardu-importExcel → GarduController::importExcel()
 $parts = explode('-', $page);
 $controllerName = ucfirst($parts[0]) . 'Controller';
 $methodName = isset($parts[1]) ? implode('', array_slice($parts, 1)) : 'index';

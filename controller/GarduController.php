@@ -1,4 +1,5 @@
 <?php
+
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
@@ -15,10 +16,12 @@ class GarduController
 
     public function index()
     {
-        $filter_bulan = isset($_GET['bulan']) ? $_GET['bulan'] : '';
-        $filter_tahun = isset($_GET['tahun']) ? $_GET['tahun'] : '';
+        $filter_bulan = isset($_GET['bulan']) ? trim($_GET['bulan']) : '';
+        $filter_tahun = isset($_GET['tahun']) ? trim($_GET['tahun']) : '';
+        $filter = '';
 
-        if (!empty($filter_bulan) && !empty($filter_tahun)) {
+        if ($filter_bulan !== '' && $filter_tahun !== '') {
+            $filter = "$filter_bulan-$filter_tahun";
             $dataGardu = $this->model->getGarduByMonthYear($filter_bulan, $filter_tahun);
         } else {
             $dataGardu = $this->model->getAllGardu();
@@ -38,6 +41,10 @@ class GarduController
             return;
         }
 
+        $bulan = $_POST['bulan'] ?? '';
+        $tahun = $_POST['tahun'] ?? '';
+        $tanggal = ($bulan && $tahun) ? "$bulan-$tahun" : date('F-Y');
+
         $dataArray = $_POST['data'];
         $insertedCount = 0;
         $errorCount = 0;
@@ -46,12 +53,7 @@ class GarduController
             $nama_penyulang = mysqli_real_escape_string($koneksi, $row['nama_penyulang']);
 
             $fields = [
-                't1_inspeksi', 't1_realisasi', 't2_inspeksi', 't2_realisasi',
-                'pengukuran', 'pergantian_arrester', 'pergantian_fco', 'relokasi_gardu',
-                'pembangunan_gardu_siapan', 'penyimbang_beban_gardu', 'pemecahan_beban_gardu',
-                'perubahan_tap_charger_trafo', 'pergantian_box', 'pergantian_opstic',
-                'perbaikan_grounding', 'accesoris_gardu', 'pergantian_kabel_isolasi',
-                'pemasangan_cover_isolasi', 'pemasangan_penghalang_panjat', 'alat_ultrasonik'
+                't1_inspeksi','t1_realisasi','t2_inspeksi','t2_realisasi','pengukuran','pergantian_arrester','pergantian_fco','relokasi_gardu','pembangunan_gardu_siapan','penyimbang_beban_gardu','pemecahan_beban_gardu','perubahan_tap_charger_trafo','pergantian_box','pergantian_opstic','perbaikan_grounding','accesoris_gardu','pergantian_kabel_isolasi','pemasangan_cover_isolasi','pemasangan_penghalang_panjat','alat_ultrasonik'
             ];
 
             $values = [];
@@ -67,8 +69,9 @@ class GarduController
             if (mysqli_query($koneksi, $query)) {
                 $gardu_id = mysqli_insert_id($koneksi);
                 $insertedCount++;
+                $tanggalDb = mysqli_real_escape_string($koneksi, $tanggal);
                 $insertPemeliharaanQuery = "INSERT INTO data_pemeliharaan (tanggal, nama_objek, id_sub_kategori) 
-                                            VALUES (NOW(), 'gardu', $gardu_id)";
+                                            VALUES ('$tanggalDb', 'gardu', $gardu_id)";
                 if (!mysqli_query($koneksi, $insertPemeliharaanQuery)) {
                     $errorCount++;
                 }
@@ -88,6 +91,7 @@ class GarduController
     {
         require_once 'vendor/autoload.php';
         include_once 'koneksi.php';
+
         global $koneksi;
 
         if (!isset($file['tmp_name']) || empty($file['tmp_name'])) {
@@ -118,12 +122,7 @@ class GarduController
             $highestRow = $sheet->getHighestDataRow();
 
             $fieldMap = [
-                't1_inspeksi', 't1_realisasi', 't2_inspeksi', 't2_realisasi',
-                'pengukuran', 'pergantian_arrester', 'pergantian_fco', 'relokasi_gardu',
-                'pembangunan_gardu_siapan', 'penyimbang_beban_gardu', 'pemecahan_beban_gardu',
-                'perubahan_tap_charger_trafo', 'pergantian_box', 'pergantian_opstic',
-                'perbaikan_grounding', 'accesoris_gardu', 'pergantian_kabel_isolasi',
-                'pemasangan_cover_isolasi', 'pemasangan_penghalang_panjat', 'alat_ultrasonik'
+                't1_inspeksi','t1_realisasi','t2_inspeksi','t2_realisasi','pengukuran','pergantian_arrester','pergantian_fco','relokasi_gardu','pembangunan_gardu_siapan','penyimbang_beban_gardu','pemecahan_beban_gardu','perubahan_tap_charger_trafo','pergantian_box','pergantian_opstic','perbaikan_grounding','accesoris_gardu','pergantian_kabel_isolasi','pemasangan_cover_isolasi','pemasangan_penghalang_panjat','alat_ultrasonik'
             ];
 
             $insertedCount = 0;
@@ -135,6 +134,7 @@ class GarduController
                 $nama_penyulang = trim(mysqli_real_escape_string($koneksi, $nama_penyulang));
 
                 $values = [];
+
                 for ($i = 0; $i < count($fieldMap); $i++) {
                     $colIndex = Coordinate::stringFromColumnIndex($i + 3);
                     $val = $sheet->getCell("$colIndex$row")->getValue();
@@ -166,55 +166,85 @@ class GarduController
             } else {
                 echo "<script>alert('Import berhasil! $insertedCount data telah diimpor.'); window.location.href = 'index.php?page=data-gardu';</script>";
             }
-
         } catch (\Exception $e) {
             echo "<script>alert('Terjadi kesalahan: " . addslashes($e->getMessage()) . "'); window.location.href = 'index.php?page=data-gardu';</script>";
         }
     }
 
+    public function tambahData()
+    {
+        include 'view/gardu/tambah-data.php';
+    }
+
     public function edit()
     {
-        $id = isset($_GET['id']) ? $_GET['id'] : null;
+        $id = $_GET['id'] ?? null;
+        if (!$id) {
+            echo "<script>alert('ID tidak valid'); window.location.href='index.php?page=data-gardu';</script>";
+            return;
+        }
 
-        if ($id) {
-            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                $data = $_POST;
-                foreach ($data as $key => $val) {
-                    if ($key !== 'nama_penyulang' && $key !== 'tanggal') {
-                        $data[$key] = (float)$val;
-                    }
-                }
-
-                if ($this->model->updateGardu($id, $data)) {
-                    echo "<script>alert('Data berhasil diperbarui.'); window.location.href = 'index.php?page=data-gardu';</script>";
-                } else {
-                    echo "<script>alert('Gagal memperbarui data.'); window.location.href = 'index.php?page=data-gardu';</script>";
-                }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = $_POST;
+            if ($this->model->updateGardu($id, $data)) {
+                echo "<script>alert('Data berhasil diperbarui.'); window.location.href='index.php?page=data-gardu';</script>";
             } else {
-                $gardu = $this->model->getGarduById($id);
-                if ($gardu) {
-                    include 'view/gardu/edit.php';
-                } else {
-                    echo "<script>alert('Data tidak ditemukan.'); window.location.href = 'index.php?page=data-gardu';</script>";
-                }
+                echo "<script>alert('Gagal memperbarui data.'); window.location.href='index.php?page=data-gardu';</script>";
             }
         } else {
-            echo "<script>alert('ID tidak valid.'); window.location.href = 'index.php?page=data-gardu';</script>";
+            $data = $this->model->getGarduById($id);
+            include 'view/gardu/edit-data.php';
         }
     }
 
     public function delete()
     {
-        $id = isset($_GET['id']) ? $_GET['id'] : null;
+        $id = $_GET['id'] ?? null;
+        if (!$id) {
+            echo "<script>alert('ID tidak valid'); window.location.href='index.php?page=data-gardu';</script>";
+            return;
+        }
 
-        if ($id) {
-            if ($this->model->deleteGardu($id)) {
-                echo "<script>alert('Data berhasil dihapus.'); window.location.href = 'index.php?page=data-gardu';</script>";
+        if ($this->model->deleteGardu($id)) {
+            echo "<script>alert('Data berhasil dihapus.'); window.location.href='index.php?page=data-gardu';</script>";
+        } else {
+            echo "<script>alert('Gagal menghapus data.'); window.location.href='index.php?page=data-gardu';</script>";
+        }
+    }
+    public function simpanManual()
+    {
+        include_once 'koneksi.php';
+        global $koneksi;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $nama_penyulang = mysqli_real_escape_string($koneksi, $_POST['nama_penyulang'] ?? '');
+            $tanggal = mysqli_real_escape_string($koneksi, $_POST['tanggal'] ?? '');
+
+            $fields = [
+                't1_inspeksi','t1_realisasi','t2_inspeksi','t2_realisasi','pengukuran','pergantian_arrester','pergantian_fco','relokasi_gardu','pembangunan_gardu_siapan','penyimbang_beban_gardu','pemecahan_beban_gardu','perubahan_tap_charger_trafo','pergantian_box','pergantian_opstic','perbaikan_grounding','accesoris_gardu','pergantian_kabel_isolasi','pemasangan_cover_isolasi','pemasangan_penghalang_panjat','alat_ultrasonik'
+            ];
+
+            $values = [];
+            foreach ($fields as $field) {
+                $val = isset($_POST[$field]) ? str_replace(',', '.', $_POST[$field]) : 0;
+                $val = filter_var($val, FILTER_VALIDATE_FLOAT);
+                $values[] = $val === false ? 0 : $val;
+            }
+
+            $query = "INSERT INTO gardu (nama_penyulang, " . implode(", ", $fields) . ") 
+                      VALUES ('$nama_penyulang', " . implode(", ", $values) . ")";
+
+            if (mysqli_query($koneksi, $query)) {
+                $gardu_id = mysqli_insert_id($koneksi);
+                $insertPemeliharaanQuery = "INSERT INTO data_pemeliharaan (tanggal, nama_objek, id_sub_kategori) 
+                                            VALUES ('$tanggal', 'gardu', $gardu_id)";
+                mysqli_query($koneksi, $insertPemeliharaanQuery);
+                echo "<script>alert('Data berhasil ditambahkan.'); window.location.href = 'index.php?page=data-gardu';</script>";
             } else {
-                echo "<script>alert('Gagal menghapus data.'); window.location.href = 'index.php?page=data-gardu';</script>";
+                echo "<script>alert('Gagal menyimpan data.'); window.location.href = 'index.php?page=tambah-gardu';</script>";
             }
         } else {
-            echo "<script>alert('ID tidak valid.'); window.location.href = 'index.php?page=data-gardu';</script>";
+            echo "<script>alert('Metode tidak valid.'); window.location.href = 'index.php?page=data-gardu';</script>";
         }
     }
 }
@@ -222,9 +252,9 @@ class GarduController
 function extractMonthYearAsString($fileName)
 {
     $result = "Januari " . date('Y');
-    $monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    $monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     $year = date('Y');
-    if (preg_match('/(\\d{4})/', $fileName, $yearMatches)) {
+    if (preg_match('/(\d{4})/', $fileName, $yearMatches)) {
         $year = $yearMatches[1];
     }
     $monthPattern = '/' . implode('|', $monthNames) . '/i';
@@ -238,15 +268,14 @@ function extractMonthYearAsString($fileName)
 function formatTanggalKeSQL($tanggalString)
 {
     $monthNames = [
-        'Januari' => '01','Februari' => '02','Maret' => '03','April' => '04','Mei' => '05','Juni' => '06',
-        'Juli' => '07','Agustus' => '08','September' => '09','Oktober' => '10','November' => '11','Desember' => '12'
+        'Januari' => '01','Februari' => '02','Maret' => '03','April' => '04','Mei' => '05','Juni' => '06','Juli' => '07','Agustus' => '08','September' => '09','Oktober' => '10','November' => '11','Desember' => '12'
     ];
-    if (preg_match('/(\\w+)\\s+(\\d{4})/', $tanggalString, $matches)) {
+    if (preg_match('/(\w+)\s+(\d{4})/', $tanggalString, $matches)) {
         $bulanNama = ucfirst(strtolower($matches[1]));
-        if (!isset($monthNames[$bulanNama])) return date('Y-m-d');
-        $bulanAngka = $monthNames[$bulanNama];
+        $bulanAngka = $monthNames[$bulanNama] ?? '01';
         $tahun = $matches[2];
         return "$tahun-$bulanAngka-01";
     }
     return date('Y-m-d');
 }
+

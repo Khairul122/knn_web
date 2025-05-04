@@ -31,31 +31,29 @@ class GarduModel
 
     public function getGarduByMonthYear($bulan, $tahun)
     {
-        $bulanAngka = $this->getBulanAngka($bulan);
-        $filter = "$tahun-$bulanAngka-01";
-        
+        $filter = "$bulan-$tahun";
+    
         $query = "SELECT g.*, dp.tanggal 
                   FROM gardu g
                   LEFT JOIN data_pemeliharaan dp ON g.id_gardu = dp.id_sub_kategori
                   WHERE dp.nama_objek = 'gardu' 
-                  AND YEAR(dp.tanggal) = ? 
-                  AND MONTH(dp.tanggal) = ?";
-        
+                  AND dp.tanggal = ?";
+    
         $stmt = $this->db->prepare($query);
-        $stmt->bind_param("ii", $tahun, $bulanAngka);
+        $stmt->bind_param("s", $filter);
         $stmt->execute();
         $result = $stmt->get_result();
-
+    
         $data = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
                 $data[] = $row;
             }
         }
-
+    
         return $data;
     }
-
+    
     public function getGarduById($id)
     {
         $query = "SELECT g.*, dp.tanggal 
@@ -131,7 +129,6 @@ class GarduModel
         $result = $stmt->execute();
         
         if ($result && isset($data['tanggal'])) {
-            // Format tanggal dari string 'Bulan Tahun' ke format MySQL 'YYYY-MM-DD'
             $tanggalObj = $this->formatTanggalKeSQL($data['tanggal']);
             
             $updateDateQuery = "UPDATE data_pemeliharaan SET tanggal = ? 
@@ -223,14 +220,12 @@ class GarduModel
     
     private function formatTanggalKeSQL($tanggalString)
     {
-        // Format dari "Bulan Tahun" ke "YYYY-MM-DD"
         if (preg_match('/(\w+)\s+(\d{4})/', $tanggalString, $matches)) {
             $bulan = $this->getBulanAngka($matches[1]);
             $tahun = $matches[2];
-            return "$tahun-$bulan-01"; // Menggunakan tanggal 1 sebagai default
+            return "$tahun-$bulan-01"; 
         }
-        
-        // Jika format tidak sesuai, gunakan tanggal saat ini
+
         return date('Y-m-d');
     }
 }
