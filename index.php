@@ -19,7 +19,8 @@ if (!isset($_SESSION['login']) && !in_array($page, $public_pages)) {
 $direct_pages = [
     'login' => 'view/login.php',
     'home' => 'view/home.php',
-    'import-form-gardu' => 'view/gardu/import-data.php'
+    'import-form-gardu' => 'view/gardu/import-data.php',
+    'import-form-sutm' => 'view/sutm/import-data.php'
 ];
 
 // Jika halaman ada di daftar direct pages
@@ -37,6 +38,7 @@ if ($page === 'logout') {
 
 // Mapping halaman ke controller dan metode
 $page_mapping = [
+    // Gardu
     'data-gardu' => ['controller' => 'GarduController', 'method' => 'index'],
     'import-gardu-save' => ['controller' => 'GarduController', 'method' => 'importGarduSave'],
     'tambah-data-gardu' => ['controller' => 'GarduController', 'method' => 'tambahData'],
@@ -44,7 +46,19 @@ $page_mapping = [
     'simpan-manual-gardu' => ['controller' => 'GarduController', 'method' => 'simpanManual'],
     'hapus-gardu' => ['controller' => 'GarduController', 'method' => 'delete'],
     'edit-gardu' => ['controller' => 'GarduController', 'method' => 'edit'],
-    'update-gardu' => ['controller' => 'GarduController', 'method' => 'edit']
+    'update-gardu' => ['controller' => 'GarduController', 'method' => 'edit'],
+    
+    // SUTM
+    'data-sutm' => ['controller' => 'SutmController', 'method' => 'index'],
+    'tambah-data-sutm' => ['controller' => 'SutmController', 'method' => 'tambahData'],
+    'tambah-sutm' => ['controller' => 'SutmController', 'method' => 'tambahData'],
+    'import-excel-sutm' => ['controller' => 'SutmController', 'method' => 'importExcel'],
+    'import-sutm-save' => ['controller' => 'SutmController', 'method' => 'importSutmSave'],
+    'simpan-manual-sutm' => ['controller' => 'SutmController', 'method' => 'simpanManual'],
+    'hapus-sutm' => ['controller' => 'SutmController', 'method' => 'delete'],
+    'edit-sutm' => ['controller' => 'SutmController', 'method' => 'edit'],
+    'update-sutm' => ['controller' => 'SutmController', 'method' => 'edit'],
+    'preview-import-sutm' => ['controller' => 'SutmController', 'method' => 'previewImport']
 ];
 
 // Jika halaman ada di mapping
@@ -58,7 +72,13 @@ if (isset($page_mapping[$page])) {
         if (class_exists($controller_name)) {
             $controller = new $controller_name();
             if (method_exists($controller, $method_name)) {
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                if ($_SERVER['REQUEST_METHOD'] === 'POST' && $method_name === 'importExcel' && isset($_FILES['fileExcel'])) {
+                    // Handle khusus untuk upload file
+                    $preview = isset($_POST['preview']) ? $_POST['preview'] : 0;
+                    $bulan = $_POST['bulan'] ?? '';
+                    $tahun = $_POST['tahun'] ?? '';
+                    $controller->$method_name($_FILES['fileExcel'], $preview, $bulan, $tahun);
+                } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $controller->$method_name($_POST);
                 } else {
                     $controller->$method_name();
