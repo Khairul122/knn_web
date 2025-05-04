@@ -75,67 +75,41 @@ class GarduModel
 
     public function updateGardu($id, $data)
     {
+        // Gunakan query manual untuk menghindari masalah dengan bind_param
         $query = "UPDATE gardu SET 
-                  nama_penyulang = ?,
-                  t1_inspeksi = ?,
-                  t1_realisasi = ?,
-                  t2_inspeksi = ?,
-                  t2_realisasi = ?,
-                  pengukuran = ?,
-                  pergantian_arrester = ?,
-                  pergantian_fco = ?,
-                  relokasi_gardu = ?,
-                  pembangunan_gardu_siapan = ?,
-                  penyimbang_beban_gardu = ?,
-                  pemecahan_beban_gardu = ?,
-                  perubahan_tap_charger_trafo = ?,
-                  pergantian_box = ?,
-                  pergantian_opstic = ?,
-                  perbaikan_grounding = ?,
-                  accesoris_gardu = ?,
-                  pergantian_kabel_isolasi = ?,
-                  pemasangan_cover_isolasi = ?,
-                  pemasangan_penghalang_panjat = ?,
-                  alat_ultrasonik = ?
-                  WHERE id_gardu = ?";
+                  nama_penyulang = '" . $this->db->real_escape_string($data['nama_penyulang'] ?? '') . "',
+                  t1_inspeksi = " . floatval($data['t1_inspeksi'] ?? 0) . ",
+                  t1_realisasi = " . floatval($data['t1_realisasi'] ?? 0) . ",
+                  t2_inspeksi = " . floatval($data['t2_inspeksi'] ?? 0) . ",
+                  t2_realisasi = " . floatval($data['t2_realisasi'] ?? 0) . ",
+                  pengukuran = " . floatval($data['pengukuran'] ?? 0) . ",
+                  pergantian_arrester = " . intval($data['pergantian_arrester'] ?? 0) . ",
+                  pergantian_fco = " . intval($data['pergantian_fco'] ?? 0) . ",
+                  relokasi_gardu = " . intval($data['relokasi_gardu'] ?? 0) . ",
+                  pembangunan_gardu_siapan = " . intval($data['pembangunan_gardu_siapan'] ?? 0) . ",
+                  penyimbang_beban_gardu = " . intval($data['penyimbang_beban_gardu'] ?? 0) . ",
+                  pemecahan_beban_gardu = " . intval($data['pemecahan_beban_gardu'] ?? 0) . ",
+                  perubahan_tap_charger_trafo = " . intval($data['perubahan_tap_charger_trafo'] ?? 0) . ",
+                  pergantian_box = " . intval($data['pergantian_box'] ?? 0) . ",
+                  pergantian_opstic = " . intval($data['pergantian_opstic'] ?? 0) . ",
+                  perbaikan_grounding = " . intval($data['perbaikan_grounding'] ?? 0) . ",
+                  accesoris_gardu = " . intval($data['accesoris_gardu'] ?? 0) . ",
+                  pergantian_kabel_isolasi = " . intval($data['pergantian_kabel_isolasi'] ?? 0) . ",
+                  pemasangan_cover_isolasi = " . intval($data['pemasangan_cover_isolasi'] ?? 0) . ",
+                  pemasangan_penghalang_panjat = " . intval($data['pemasangan_penghalang_panjat'] ?? 0) . ",
+                  alat_ultrasonik = " . intval($data['alat_ultrasonik'] ?? 0) . "
+                  WHERE id_gardu = " . intval($id);
         
-        $stmt = $this->db->prepare($query);
-        $stmt->bind_param(
-            "sdddddiiiiiiiiiiiiiii", 
-            $data['nama_penyulang'],
-            $data['t1_inspeksi'],
-            $data['t1_realisasi'],
-            $data['t2_inspeksi'],
-            $data['t2_realisasi'],
-            $data['pengukuran'],
-            $data['pergantian_arrester'],
-            $data['pergantian_fco'],
-            $data['relokasi_gardu'],
-            $data['pembangunan_gardu_siapan'],
-            $data['penyimbang_beban_gardu'],
-            $data['pemecahan_beban_gardu'],
-            $data['perubahan_tap_charger_trafo'],
-            $data['pergantian_box'],
-            $data['pergantian_opstic'],
-            $data['perbaikan_grounding'],
-            $data['accesoris_gardu'],
-            $data['pergantian_kabel_isolasi'],
-            $data['pemasangan_cover_isolasi'],
-            $data['pemasangan_penghalang_panjat'],
-            $data['alat_ultrasonik'],
-            $id
-        );
+        $result = $this->db->query($query);
         
-        $result = $stmt->execute();
-        
-        if ($result && isset($data['tanggal'])) {
-            $tanggalObj = $this->formatTanggalKeSQL($data['tanggal']);
+        // Update tanggal jika bulan dan tahun ada
+        if ($result && isset($data['bulan']) && isset($data['tahun'])) {
+            $tanggal = $data['bulan'] . '-' . $data['tahun']; // Format sesuai "Maret-2023"
+            $tanggal_escaped = $this->db->real_escape_string($tanggal);
             
-            $updateDateQuery = "UPDATE data_pemeliharaan SET tanggal = ? 
-                                WHERE id_sub_kategori = ? AND nama_objek = 'gardu'";
-            $dateStmt = $this->db->prepare($updateDateQuery);
-            $dateStmt->bind_param("si", $tanggalObj, $id);
-            $dateStmt->execute();
+            $updateDateQuery = "UPDATE data_pemeliharaan SET tanggal = '$tanggal_escaped' 
+                              WHERE id_sub_kategori = " . intval($id) . " AND nama_objek = 'gardu'";
+            $this->db->query($updateDateQuery);
         }
         
         return $result;
@@ -156,22 +130,22 @@ class GarduModel
     
     public function getAvailableMonths()
     {
-        $query = "SELECT DISTINCT YEAR(tanggal) as tahun, MONTH(tanggal) as bulan 
-                  FROM data_pemeliharaan 
-                  WHERE nama_objek = 'gardu' 
-                  ORDER BY tahun DESC, bulan DESC";
+        $query = "SELECT DISTINCT tanggal FROM data_pemeliharaan WHERE nama_objek = 'gardu' ORDER BY tanggal DESC";
         $result = $this->db->query($query);
         
         $months = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $bulanNama = $this->getNamaBulan($row['bulan']);
-                $months[] = [
-                    'bulan_angka' => $row['bulan'],
-                    'bulan_nama' => $bulanNama,
-                    'tahun' => $row['tahun'],
-                    'label' => $bulanNama . ' ' . $row['tahun']
-                ];
+                $tanggalParts = explode('-', $row['tanggal']);
+                if (count($tanggalParts) == 2) {
+                    $bulan = $tanggalParts[0];
+                    $tahun = $tanggalParts[1];
+                    $months[] = [
+                        'bulan_nama' => $bulan,
+                        'tahun' => $tahun,
+                        'label' => $bulan . ' ' . $tahun
+                    ];
+                }
             }
         }
         
@@ -216,16 +190,5 @@ class GarduModel
         ];
         
         return $bulanMap[ucfirst(strtolower($bulanNama))] ?? 1;
-    }
-    
-    private function formatTanggalKeSQL($tanggalString)
-    {
-        if (preg_match('/(\w+)\s+(\d{4})/', $tanggalString, $matches)) {
-            $bulan = $this->getBulanAngka($matches[1]);
-            $tahun = $matches[2];
-            return "$tahun-$bulan-01"; 
-        }
-
-        return date('Y-m-d');
     }
 }
