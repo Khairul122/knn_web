@@ -18,6 +18,10 @@
         <i class="mdi mdi-grid-large menu-icon"></i>
         <span class="menu-title">Data Pemeliharaan</span>
       </a>
+      <a class="nav-link" href="index.php?page=prediksi">
+        <i class="mdi mdi-grid-large menu-icon"></i>
+        <span class="menu-title">Data Prediksi</span>
+      </a>
     </li>
   </ul>
 </nav>
