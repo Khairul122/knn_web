@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: May 08, 2025 at 12:00 PM
+-- Generation Time: May 08, 2025 at 01:27 PM
 -- Server version: 8.0.30
 -- PHP Version: 8.1.10
 
@@ -20,167 +20,6 @@ SET time_zone = "+00:00";
 --
 -- Database: `db_knn`
 --
-
-DELIMITER $$
---
--- Procedures
---
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_data_pelatihan_knn` (IN `p_tanggal_awal` DATE, IN `p_tanggal_akhir` DATE, IN `p_penyulang` VARCHAR(100))   BEGIN
-    SELECT 
-        fk.nama_penyulang,
-        fk.tahun,
-        fk.bulan,
-        fk.jumlah_gardu,
-        fk.jumlah_sutm,
-        fk.gardu_t1_inspeksi,
-        fk.gardu_t1_realisasi,
-        fk.gardu_rasio_t1,
-        fk.gardu_t2_inspeksi,
-        fk.gardu_t2_realisasi,
-        fk.gardu_rasio_t2,
-        fk.sutm_t1_inspeksi,
-        fk.sutm_t1_realisasi,
-        fk.sutm_rasio_t1,
-        fk.sutm_t2_inspeksi,
-        fk.sutm_t2_realisasi,
-        fk.sutm_rasio_t2,
-        fk.total_kegiatan_gardu,
-        fk.total_kegiatan_sutm,
-        fk.total_kegiatan,
-        fk.rasio_realisasi_rata,
-        CASE
-            WHEN fk.bobot_kegiatan = 3 THEN 'TINGGI'
-            WHEN fk.bobot_kegiatan = 2 THEN 'SEDANG'
-            ELSE 'RENDAH'
-        END AS kelas_risiko
-    FROM 
-        v_fitur_knn fk
-    WHERE 
-        (p_penyulang IS NULL OR fk.nama_penyulang = p_penyulang)
-        AND (STR_TO_DATE(CONCAT(fk.tahun, '-', fk.bulan, '-01'), '%Y-%m-%d') BETWEEN p_tanggal_awal AND LAST_DAY(p_tanggal_akhir))
-    ORDER BY 
-        fk.nama_penyulang, fk.tahun, fk.bulan;
-END$$
-
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_hitung_prediksi_risiko` (IN `p_tahun` INT, IN `p_bulan` INT)   BEGIN
-    -- Hapus prediksi lama untuk periode yang sama (jika ada)
-    DELETE FROM hasil_prediksi_risiko
-    WHERE tahun = p_tahun AND bulan = p_bulan;
-    
-    -- Masukkan data hasil prediksi ke tabel hasil_prediksi_risiko
-    INSERT INTO hasil_prediksi_risiko (nama_penyulang, tahun, bulan, nilai_risiko, tingkat_risiko)
-    SELECT 
-        nama_penyulang,
-        tahun,
-        bulan,
-        -- Placeholder untuk skor risiko (ganti dengan hasil KNN sebenarnya)
-        CASE 
-            WHEN bobot_kegiatan = 3 THEN 75 + (RAND() * 25)
-            WHEN bobot_kegiatan = 2 THEN 40 + (RAND() * 30)
-            ELSE RAND() * 35
-        END AS nilai_risiko,
-        -- Placeholder untuk tingkat risiko (ganti dengan hasil KNN sebenarnya)
-        CASE 
-            WHEN bobot_kegiatan = 3 THEN 'TINGGI'
-            WHEN bobot_kegiatan = 2 THEN 'SEDANG'
-            ELSE 'RENDAH'
-        END AS tingkat_risiko
-    FROM 
-        v_fitur_knn
-    WHERE 
-        tahun = p_tahun AND bulan = p_bulan;
-    
-    -- Menampilkan hasil prediksi
-    SELECT 
-        nama_penyulang,
-        tahun,
-        bulan,
-        tingkat_risiko,
-        nilai_risiko
-    FROM 
-        hasil_prediksi_risiko
-    WHERE 
-        tahun = p_tahun AND bulan = p_bulan
-    ORDER BY 
-        nilai_risiko DESC;
-END$$
-
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_riwayat_prediksi` (IN `p_penyulang` VARCHAR(100), IN `p_tingkat_risiko` VARCHAR(10), IN `p_jumlah_bulan` INT)   BEGIN
-    DECLARE v_bulan_awal INT;
-    DECLARE v_tahun_awal INT;
-    
-    -- Tentukan periode awal berdasarkan jumlah bulan ke belakang
-    IF p_jumlah_bulan IS NOT NULL THEN
-        SET v_bulan_awal = MONTH(DATE_SUB(NOW(), INTERVAL p_jumlah_bulan MONTH));
-        SET v_tahun_awal = YEAR(DATE_SUB(NOW(), INTERVAL p_jumlah_bulan MONTH));
-    END IF;
-    
-    SELECT 
-        hr.nama_penyulang,
-        hr.tahun,
-        hr.bulan,
-        hr.tingkat_risiko,
-        hr.nilai_risiko,
-        DATE_FORMAT(hr.tanggal_prediksi, '%Y-%m-%d %H:%i:%s') AS waktu_prediksi,
-        vf.total_kegiatan_gardu,
-        vf.total_kegiatan_sutm,
-        vf.total_kegiatan
-    FROM 
-        hasil_prediksi_risiko hr
-    LEFT JOIN
-        v_fitur_knn vf ON hr.nama_penyulang = vf.nama_penyulang
-                      AND hr.tahun = vf.tahun
-                      AND hr.bulan = vf.bulan
-    WHERE 
-        (p_penyulang IS NULL OR hr.nama_penyulang = p_penyulang)
-        AND (p_tingkat_risiko IS NULL OR hr.tingkat_risiko = p_tingkat_risiko)
-        AND (p_jumlah_bulan IS NULL OR 
-             (hr.tahun > v_tahun_awal OR 
-              (hr.tahun = v_tahun_awal AND hr.bulan >= v_bulan_awal)))
-    ORDER BY 
-        hr.tahun DESC, hr.bulan DESC, hr.nilai_risiko DESC;
-END$$
-
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_tampilkan_fitur_knn` (IN `p_tahun` INT, IN `p_bulan` INT, IN `p_penyulang` VARCHAR(100))   BEGIN
-    SELECT 
-        nama_penyulang,
-        tahun,
-        bulan,
-        jumlah_gardu,
-        jumlah_sutm,
-        gardu_t1_inspeksi,
-        gardu_t1_realisasi,
-        gardu_rasio_t1,
-        gardu_t2_inspeksi,
-        gardu_t2_realisasi,
-        gardu_rasio_t2,
-        sutm_t1_inspeksi,
-        sutm_t1_realisasi,
-        sutm_rasio_t1,
-        sutm_t2_inspeksi,
-        sutm_t2_realisasi,
-        sutm_rasio_t2,
-        total_kegiatan_gardu,
-        total_kegiatan_sutm,
-        total_kegiatan,
-        rasio_realisasi_rata,
-        bobot_kegiatan,
-        CASE
-            WHEN bobot_kegiatan = 3 THEN 'TINGGI'
-            WHEN bobot_kegiatan = 2 THEN 'SEDANG'
-            ELSE 'RENDAH'
-        END AS prediksi_risiko
-    FROM 
-        v_fitur_knn
-    WHERE 
-        (p_tahun IS NULL OR tahun = p_tahun)
-        AND (p_bulan IS NULL OR bulan = p_bulan)
-        AND (p_penyulang IS NULL OR nama_penyulang = p_penyulang)
-    ORDER BY 
-        total_kegiatan DESC;
-END$$
-
-DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -517,6 +356,41 @@ INSERT INTO `gardu` (`id_gardu`, `nama_penyulang`, `t1_inspeksi`, `t1_realisasi`
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `hasil_prediksi_risiko`
+--
+
+CREATE TABLE `hasil_prediksi_risiko` (
+  `id_prediksi` int NOT NULL,
+  `nama_penyulang` varchar(100) COLLATE utf8mb3_swedish_ci NOT NULL,
+  `tingkat_risiko` varchar(10) COLLATE utf8mb3_swedish_ci NOT NULL,
+  `nilai_risiko` decimal(10,2) NOT NULL,
+  `tanggal_prediksi` datetime DEFAULT CURRENT_TIMESTAMP,
+  `total_kegiatan` int DEFAULT '0',
+  `k_value` int DEFAULT '3'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_swedish_ci;
+
+--
+-- Dumping data for table `hasil_prediksi_risiko`
+--
+
+INSERT INTO `hasil_prediksi_risiko` (`id_prediksi`, `nama_penyulang`, `tingkat_risiko`, `nilai_risiko`, `tanggal_prediksi`, `total_kegiatan`, `k_value`) VALUES
+(157, 'LK 01 / COT GIREK', 'TINGGI', '93.23', '2025-05-08 20:13:27', 799, 5),
+(158, 'LK 02 / INC PL3', 'RENDAH', '24.53', '2025-05-08 20:13:27', 3, 5),
+(159, 'LK 03 / BUKIT HAGU', 'TINGGI', '80.61', '2025-05-08 20:13:27', 426, 5),
+(160, 'LK 04 / LHOKSUKON', 'RENDAH', '20.23', '2025-05-08 20:13:27', 257, 5),
+(161, 'LK 05 / MATANG KULI', 'RENDAH', '19.83', '2025-05-08 20:13:27', 153, 5),
+(162, 'LK 06 / INC LW9', 'RENDAH', '37.38', '2025-05-08 20:13:27', 15, 5),
+(163, 'LK 07 / LAPANG', 'RENDAH', '15.29', '2025-05-08 20:13:27', 154, 5),
+(164, 'LK 08 / POLRES,PDAM', 'SEDANG', '74.37', '2025-05-08 20:13:27', 278, 5),
+(165, 'LK 09 / PAYA BAKONG', 'SEDANG', '57.44', '2025-05-08 20:13:27', 416, 5),
+(166, 'LW 09', 'RENDAH', '30.50', '2025-05-08 20:13:27', 0, 5),
+(167, 'LW 10', 'SEDANG', '53.88', '2025-05-08 20:13:27', 420, 5),
+(168, 'PL 03', 'RENDAH', '28.69', '2025-05-08 20:13:27', 0, 5),
+(169, 'LK 05 /  MATANG KULI', 'TINGGI', '78.99', '2025-05-08 20:13:27', 627, 5);
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `sutm`
 --
 
@@ -632,6 +506,14 @@ ALTER TABLE `gardu`
   ADD PRIMARY KEY (`id_gardu`);
 
 --
+-- Indexes for table `hasil_prediksi_risiko`
+--
+ALTER TABLE `hasil_prediksi_risiko`
+  ADD PRIMARY KEY (`id_prediksi`),
+  ADD KEY `idx_prediksi_penyulang` (`nama_penyulang`),
+  ADD KEY `idx_prediksi_tingkat` (`tingkat_risiko`);
+
+--
 -- Indexes for table `sutm`
 --
 ALTER TABLE `sutm`
@@ -651,7 +533,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `data_pemeliharaan`
 --
 ALTER TABLE `data_pemeliharaan`
-  MODIFY `id_data_pemeliharaan` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=363;
+  MODIFY `id_data_pemeliharaan` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=364;
 
 --
 -- AUTO_INCREMENT for table `gardu`
@@ -660,10 +542,16 @@ ALTER TABLE `gardu`
   MODIFY `id_gardu` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=255;
 
 --
+-- AUTO_INCREMENT for table `hasil_prediksi_risiko`
+--
+ALTER TABLE `hasil_prediksi_risiko`
+  MODIFY `id_prediksi` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=170;
+
+--
 -- AUTO_INCREMENT for table `sutm`
 --
 ALTER TABLE `sutm`
-  MODIFY `id_sutm` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
+  MODIFY `id_sutm` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=50;
 
 --
 -- AUTO_INCREMENT for table `users`
