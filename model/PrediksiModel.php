@@ -1,39 +1,42 @@
 <?php
 include_once 'koneksi.php';
 
-class PrediksiModel {
+class PrediksiModel
+{
     private $db;
 
     public function __construct()
     {
         global $koneksi;
         $this->db = $koneksi;
-        
+
         if (!$this->db) {
             die("Database connection failed.");
         }
     }
-    
-    public function getFormData() {
+
+    public function getFormData()
+    {
         $penyulangList = [];
-        
+
         $query = "SELECT DISTINCT nama_penyulang FROM gardu 
                  UNION 
                  SELECT DISTINCT nama_penyulang FROM sutm 
                  ORDER BY nama_penyulang";
-        
+
         $result = mysqli_query($this->db, $query);
-        
+
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
                 $penyulangList[] = $row['nama_penyulang'];
             }
         }
-        
+
         return $penyulangList;
     }
-    
-    public function getFeatureData() {
+
+    public function getFeatureData()
+    {
         $query = "SELECT 
                     penyulang.nama_penyulang,
                     SUM(penyulang.total_kegiatan) AS total_kegiatan,
@@ -103,42 +106,63 @@ class PrediksiModel {
                   ) AS penyulang
                   GROUP BY 
                       penyulang.nama_penyulang";
-        
+
         $result = mysqli_query($this->db, $query);
         $features = [];
-        
+
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
                 $features[] = $row;
             }
         }
-        
+
         return $features;
     }
-    
-    public function runKnnPrediction($k = 3) {
+
+    public function runKnnPrediction($k)
+    {
+
         $features = $this->getFeatureData();
-        
-        $thresholdTinggi = 200;
-        $thresholdSedang = 100;
-        
+
+        $allTotalKegiatan = [];
+        foreach ($features as $feature) {
+            $allTotalKegiatan[] = $feature['total_kegiatan'];
+        }
+
+        sort($allTotalKegiatan);
+        $count = count($allTotalKegiatan);
+
+        if ($count > 0) {
+            $q1Index = floor($count * 0.25);
+            $q2Index = floor($count * 0.5);
+            $q3Index = floor($count * 0.75);
+
+            $q1Value = $allTotalKegiatan[$q1Index];
+            $q2Value = $allTotalKegiatan[$q2Index];
+            $q3Value = $allTotalKegiatan[$q3Index];
+        } else {
+            $q1Value = 50;
+            $q2Value = 100;
+            $q3Value = 200;
+        }
+
         $predictions = [];
-        
+
         foreach ($features as $feature) {
             $totalKegiatan = $feature['total_kegiatan'];
             $rasioRealisasi = $feature['rasio_realisasi'] ?? 0;
-            
-            if ($totalKegiatan > $thresholdTinggi) {
+
+            if ($totalKegiatan > $q3Value) {
                 $tingkatRisiko = 'TINGGI';
                 $nilaiRisiko = 75 + (rand(0, 25000) / 1000);
-            } elseif ($totalKegiatan > $thresholdSedang) {
+            } elseif ($totalKegiatan > $q2Value) {
                 $tingkatRisiko = 'SEDANG';
                 $nilaiRisiko = 40 + (rand(0, 35000) / 1000);
             } else {
                 $tingkatRisiko = 'RENDAH';
                 $nilaiRisiko = 10 + (rand(0, 30000) / 1000);
             }
-            
+
             $predictions[] = [
                 'nama_penyulang' => $feature['nama_penyulang'],
                 'tingkat_risiko' => $tingkatRisiko,
@@ -147,40 +171,42 @@ class PrediksiModel {
                 'rasio_realisasi' => $rasioRealisasi
             ];
         }
-        
+
         $this->savePredictions($predictions, $k);
-        
+
         return $predictions;
     }
-    
-    private function savePredictions($predictions, $k) {
+
+    private function savePredictions($predictions, $k)
+    {
         $query = "DELETE FROM hasil_prediksi_risiko";
         mysqli_query($this->db, $query);
-        
+
         foreach ($predictions as $pred) {
             $namaPenyulang = mysqli_real_escape_string($this->db, $pred['nama_penyulang']);
             $tingkatRisiko = mysqli_real_escape_string($this->db, $pred['tingkat_risiko']);
             $nilaiRisiko = floatval($pred['nilai_risiko']);
             $totalKegiatan = intval($pred['total_kegiatan']);
-            
+
             $query = "INSERT INTO hasil_prediksi_risiko 
                       (nama_penyulang, tingkat_risiko, nilai_risiko, total_kegiatan, k_value, tanggal_prediksi) 
                       VALUES 
                       ('$namaPenyulang', '$tingkatRisiko', $nilaiRisiko, $totalKegiatan, $k, NOW())";
-            
+
             mysqli_query($this->db, $query);
         }
-        
+
         return true;
     }
-    
-    public function getPredictionResults($tingkatRisiko = null) {
+
+    public function getPredictionResults($tingkatRisiko = null)
+    {
         $condition = "";
         if ($tingkatRisiko !== null) {
             $tingkatRisikoEsc = mysqli_real_escape_string($this->db, $tingkatRisiko);
             $condition = "WHERE tingkat_risiko = '$tingkatRisikoEsc'";
         }
-        
+
         $query = "SELECT 
                     id_prediksi,
                     nama_penyulang,
@@ -193,20 +219,21 @@ class PrediksiModel {
                   $condition
                   ORDER BY 
                     nilai_risiko DESC";
-        
+
         $result = mysqli_query($this->db, $query);
         $predictions = [];
-        
+
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
                 $predictions[] = $row;
             }
         }
-        
+
         return $predictions;
     }
-    
-    public function getPredictionSummary() {
+
+    public function getPredictionSummary()
+    {
         $query = "SELECT 
                     tingkat_risiko, 
                     COUNT(*) as jumlah_penyulang,
@@ -221,31 +248,32 @@ class PrediksiModel {
                         WHEN tingkat_risiko = 'SEDANG' THEN 2
                         WHEN tingkat_risiko = 'RENDAH' THEN 3
                     END";
-        
+
         $result = mysqli_query($this->db, $query);
         $summary = [];
-        
+
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
                 $summary[] = $row;
             }
         }
-        
+
         return $summary;
     }
-    
-    public function getLastPrediction() {
+
+    public function getLastPrediction()
+    {
         $query = "SELECT tanggal_prediksi, k_value
                   FROM hasil_prediksi_risiko
                   ORDER BY tanggal_prediksi DESC
                   LIMIT 1";
-        
+
         $result = mysqli_query($this->db, $query);
-        
+
         if ($result && mysqli_num_rows($result) > 0) {
             return mysqli_fetch_assoc($result);
         }
-        
+
         return null;
     }
 }

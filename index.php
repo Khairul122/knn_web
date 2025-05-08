@@ -65,6 +65,11 @@ $page_mapping = [
 
     // Prediksi
     'prediksi' => ['controller' => 'PrediksiController', 'method' => 'index'],
+    'prediksi-process' => ['controller' => 'PrediksiController', 'method' => 'process'],
+    'prediksi-filter' => ['controller' => 'PrediksiController', 'method' => 'filterByRisk'],
+    'prediksi-log' => ['controller' => 'PrediksiController', 'method' => 'viewLog'],
+    'prediksi-export-log' => ['controller' => 'PrediksiController', 'method' => 'exportLog'],
+    'prediksi-clear-log' => ['controller' => 'PrediksiController', 'method' => 'clearLog'],
 ];
 
 // Jika halaman ada di mapping
