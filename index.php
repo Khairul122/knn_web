@@ -58,7 +58,13 @@ $page_mapping = [
     'hapus-sutm' => ['controller' => 'SutmController', 'method' => 'delete'],
     'edit-sutm' => ['controller' => 'SutmController', 'method' => 'edit'],
     'update-sutm' => ['controller' => 'SutmController', 'method' => 'edit'],
-    'preview-import-sutm' => ['controller' => 'SutmController', 'method' => 'previewImport']
+    'preview-import-sutm' => ['controller' => 'SutmController', 'method' => 'previewImport'],
+
+    // Data Pemeliharaan
+    'data-pemeliharaan' => ['controller' => 'PemeliharaanController', 'method' => 'index'],
+
+    // Prediksi
+    'prediksi' => ['controller' => 'PrediksiController', 'method' => 'index'],
 ];
 
 // Jika halaman ada di mapping

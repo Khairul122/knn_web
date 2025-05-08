@@ -1,11 +1,11 @@
-<?php include('template/header.php'); ?>
+<?php include('view/template/header.php'); ?>
 
 <body class="with-welcome-text">
   <div class="container-scroller">
-    <?php include 'template/navbar.php'; ?>
+    <?php include 'view/template/navbar.php'; ?>
     <div class="container-fluid page-body-wrapper">
-      <?php include 'template/setting_panel.php'; ?>
-      <?php include 'template/sidebar.php'; ?>
+      <?php include 'view/template/setting_panel.php'; ?>
+      <?php include 'view/template/sidebar.php'; ?>
       <div class="main-panel">
         <div class="content-wrapper">
           <div class="row">
@@ -17,7 +17,7 @@
       </div>
     </div>
   </div>
-  <?php include 'template/script.php'; ?>
+  <?php include 'view/template/script.php'; ?>
 </body>
 
 </html>
