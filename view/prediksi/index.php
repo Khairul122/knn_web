@@ -12,11 +12,11 @@
             <div class="col-sm-12">
               <div class="card">
                 <div class="card-body">
-                  <h4 class="card-title">Prediksi dengan Metode KNN</h4>
+                  <h4 class="card-title">Prediksi Risiko dengan Metode KNN</h4>
                   
                   <div class="row">
                     <div class="col-md-6">
-                      <!-- Card for K Value Input -->
+                      <!-- Form untuk Parameter KNN -->
                       <div class="card border">
                         <div class="card-header bg-primary text-white">
                           <h5 class="mb-0">Parameter K-Nearest Neighbors</h5>
@@ -35,8 +35,6 @@
                                 Masukkan nilai K (1-20) untuk menentukan jumlah tetangga terdekat yang digunakan dalam algoritma KNN.
                               </div>
                             </div>
-
-                            <!-- Additional parameters can be added here in the future -->
                             
                             <div class="mt-4">
                               <button type="submit" class="btn btn-primary">
@@ -50,7 +48,7 @@
                         </div>
                       </div>
 
-                      <!-- Information Card -->
+                      <!-- Informasi tentang KNN -->
                       <div class="card mt-4">
                         <div class="card-body">
                           <h6 class="card-title"><i class="ti-info-alt text-info"></i> Tentang Metode KNN</h6>
@@ -67,20 +65,88 @@
                     </div>
                     
                     <div class="col-md-6">
-                      <!-- Placeholder for future content -->
+                      <?php if (isset($hasPrediction) && $hasPrediction): ?>
+                      <!-- Ringkasan Hasil Prediksi -->
                       <div class="card">
+                        <div class="card-header bg-success text-white">
+                          <h5 class="mb-0">Ringkasan Hasil Prediksi</h5>
+                        </div>
                         <div class="card-body">
-                          <h5 class="card-title">Hasil Prediksi Sebelumnya</h5>
-                          <p class="card-text text-muted">
-                            Hasil prediksi akan ditampilkan di sini setelah proses prediksi dijalankan.
+                          <p class="card-text">
+                            Prediksi terakhir: <strong><?= $lastPrediction['tanggal_prediksi'] ?></strong>
+                            dengan nilai K = <strong><?= $lastPrediction['k_value'] ?></strong>
                           </p>
-                          <!-- Empty placeholder for previous results -->
-                          <div class="text-center py-5">
-                            <i class="ti-stats-up icon-lg text-muted"></i>
-                            <p class="text-muted mt-3">Belum ada hasil prediksi</p>
+                          
+                          <div class="table-responsive">
+                            <table class="table table-bordered">
+                              <thead>
+                                <tr class="text-center">
+                                  <th>Tingkat Risiko</th>
+                                  <th>Jumlah Penyulang</th>
+                                  <th>Rata-Rata Nilai</th>
+                                
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <?php foreach ($predictionSummary as $summary): ?>
+                                <tr>
+                                  <td>
+                                    <span class="badge bg-<?= strtolower($summary['tingkat_risiko']) === 'tinggi' ? 'danger' : (strtolower($summary['tingkat_risiko']) === 'sedang' ? 'warning' : 'success') ?>">
+                                      <?= $summary['tingkat_risiko'] ?>
+                                    </span>
+                                  </td>
+                                  <td class="text-center"><?= $summary['jumlah_penyulang'] ?></td>
+                                  <td class="text-center"><?= number_format($summary['rata_nilai_risiko'], 2) ?></td>
+                                
+                                </tr>
+                                <?php endforeach; ?>
+                              </tbody>
+                            </table>
                           </div>
                         </div>
                       </div>
+
+                      <!-- Tabel Hasil Prediksi -->
+                      <div class="card mt-4">
+                        <div class="card-header bg-primary text-white">
+                          <h5 class="mb-0">Hasil Prediksi Risiko</h5>
+                        </div>
+                        <div class="card-body">
+                          <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                              <thead>
+                                <tr>
+                                  <th>Penyulang</th>
+                                  <th>Tingkat Risiko</th>
+                                  <th>Nilai Risiko</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <?php foreach ($predictionResults as $pred): ?>
+                                <tr>
+                                  <td><?= $pred['nama_penyulang'] ?></td>
+                                  <td>
+                                    <span class="badge bg-<?= strtolower($pred['tingkat_risiko']) === 'tinggi' ? 'danger' : (strtolower($pred['tingkat_risiko']) === 'sedang' ? 'warning' : 'success') ?>">
+                                      <?= $pred['tingkat_risiko'] ?>
+                                    </span>
+                                  </td>
+                                  <td><?= number_format($pred['nilai_risiko'], 2) ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      <?php else: ?>
+                      <!-- Belum ada prediksi -->
+                      <div class="card">
+                        <div class="card-body text-center py-5">
+                          <i class="ti-stats-up icon-lg text-muted"></i>
+                          <p class="text-muted mt-3">Belum ada hasil prediksi. Silakan klik tombol "Mulai Prediksi" untuk memulai proses prediksi risiko.</p>
+                        </div>
+                      </div>
+                      <?php endif; ?>
                     </div>
                   </div>
                 </div>
@@ -93,5 +159,4 @@
   </div>
   <?php include 'view/template/script.php'; ?>
 </body>
-
 </html>
