@@ -21,6 +21,14 @@
         <span class="menu-title">Data Pemeliharaan</span>
       </a>
 
+      <a class="nav-link" href="index.php?page=data-pemeliharaan">
+        <i class="mdi mdi-wrench menu-icon"></i>
+        <span class="menu-title">Data Pemeliharaan</span>
+      </a>
+      <a class="nav-link" href="index.php?page=clustering">
+        <i class="mdi mdi-wrench menu-icon"></i>
+        <span class="menu-title">Cluestering</span>
+      </a>
       <a class="nav-link" href="index.php?page=prediksi">
         <i class="mdi mdi-chart-line menu-icon"></i>
         <span class="menu-title">Data Prediksi</span>
