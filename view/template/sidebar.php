@@ -7,27 +7,27 @@
       </a>
 
       <a class="nav-link" href="index.php?page=data-gardu">
-        <i class="mdi mdi-transmission-tower menu-icon"></i>
+        <i class="mdi mdi-flash menu-icon"></i>
         <span class="menu-title">Data Gardu</span>
       </a>
 
       <a class="nav-link" href="index.php?page=data-sutm">
-        <i class="mdi mdi-power-plug menu-icon"></i>
+        <i class="mdi mdi-transmission-tower menu-icon"></i>
         <span class="menu-title">Data SUTM</span>
       </a>
 
       <a class="nav-link" href="index.php?page=data-pemeliharaan">
-        <i class="mdi mdi-wrench menu-icon"></i>
+        <i class="mdi mdi-tools menu-icon"></i>
         <span class="menu-title">Data Pemeliharaan</span>
       </a>
 
       <a class="nav-link" href="index.php?page=cluster">
-        <i class="mdi mdi-wrench menu-icon"></i>
-        <span class="menu-title">Cluestering</span>
+        <i class="mdi mdi-chart-scatter-plot menu-icon"></i>
+        <span class="menu-title">Clustering</span>
       </a>
 
-      <a class="nav-link" href="index.php?page=split-data">
-        <i class="mdi mdi-wrench menu-icon"></i>
+      <a class="nav-link" href="index.php?page=split">
+        <i class="mdi mdi-content-cut menu-icon"></i>
         <span class="menu-title">Split Data</span>
       </a>
 

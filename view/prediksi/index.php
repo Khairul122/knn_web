@@ -1,4 +1,89 @@
-<?php include('view/template/header.php'); ?>
+<?php
+require_once 'model/PrediksiModel.php';
+
+$message = '';
+$messageType = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $prediksiModel = new PrediksiModel();
+    
+    if (isset($_POST['action'])) {
+        switch ($_POST['action']) {
+            case 'train_knn':
+                try {
+                    $k_value = (int)$_POST['k_value'];
+                    
+                    if ($k_value < 1 || $k_value > 20) {
+                        throw new Exception("Nilai K harus antara 1-20");
+                    }
+                    
+                    $result = $prediksiModel->trainKNN($k_value);
+                    if ($result['success']) {
+                        $message = $result['message'];
+                        $messageType = 'success';
+                        $_SESSION['train_info'] = [
+                            'total_penyulang' => $result['total_penyulang'],
+                            'k_value' => $result['k_value'],
+                            'training_data_count' => $result['training_data_count']
+                        ];
+                    } else {
+                        $message = $result['message'];
+                        $messageType = 'error';
+                    }
+                } catch (Exception $e) {
+                    $message = 'Error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
+                break;
+                
+            case 'reset_data':
+                try {
+                    $result = $prediksiModel->resetAllPrediksiData();
+                    if ($result['success']) {
+                        $message = $result['message'];
+                        $messageType = 'success';
+                        unset($_SESSION['train_info']);
+                    } else {
+                        $message = $result['message'];
+                        $messageType = 'error';
+                    }
+                } catch (Exception $e) {
+                    $message = 'Error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
+                break;
+        }
+    }
+}
+
+try {
+    $prediksiModel = new PrediksiModel();
+    $statistics = $prediksiModel->getPrediksiStatistics();
+    $prediksiData = $prediksiModel->getPrediksiData();
+    $confusionMatrix = $prediksiModel->getConfusionMatrix();
+} catch (Exception $e) {
+    $statistics = [
+        'total_prediksi' => 0,
+        'tinggi_count' => 0,
+        'sedang_count' => 0,
+        'rendah_count' => 0,
+        'tinggi_percentage' => 0,
+        'sedang_percentage' => 0,
+        'rendah_percentage' => 0,
+        'avg_risk_score' => 0,
+        'avg_total_kegiatan' => 0,
+        'last_k_value' => 3
+    ];
+    $prediksiData = [];
+    $confusionMatrix = ['matrix' => [], 'accuracy' => 0];
+    if (empty($message)) {
+        $message = 'Error loading data: ' . $e->getMessage();
+        $messageType = 'error';
+    }
+}
+
+include('view/template/header.php');
+?>
 
 <body class="with-welcome-text">
     <div class="container-scroller">
@@ -6,6 +91,7 @@
         <div class="container-fluid page-body-wrapper">
             <?php include 'view/template/setting_panel.php'; ?>
             <?php include 'view/template/sidebar.php'; ?>
+            
             <div class="main-panel">
                 <div class="content-wrapper">
                     <div class="row">
@@ -14,288 +100,307 @@
                                 <div class="d-sm-flex align-items-center justify-content-between border-bottom">
                                     <div>
                                         <div class="btn-wrapper">
-                                            <h3 class="mb-0">Prediksi Risiko Gangguan Jaringan</h3>
-                                            <p class="text-muted">Analisis prediksi menggunakan metode K-Nearest Neighbor (KNN) berdasarkan data clustering</p>
+                                            <h3 class="mb-0">Prediksi Risiko KNN</h3>
+                                            <p class="text-muted">Training dan prediksi risiko menggunakan K-Nearest Neighbors</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <?php if (!empty($message)): ?>
+                                    <div class="alert alert-<?php echo $messageType === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show mt-3" role="alert">
+                                        <?php echo htmlspecialchars($message); ?>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if (isset($_SESSION['error'])): ?>
+                                    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                                        <i class="mdi mdi-alert-circle"></i>
+                                        <?= $_SESSION['error']; ?>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                    <?php unset($_SESSION['error']); ?>
+                                <?php endif; ?>
+
+                                <?php if (isset($_SESSION['train_info'])): ?>
+                                    <div class="alert alert-info alert-dismissible fade show mt-3" role="alert">
+                                        <i class="mdi mdi-information"></i>
+                                        <strong>Informasi Training:</strong><br>
+                                        K Value: <?= $_SESSION['train_info']['k_value'] ?> | 
+                                        Total Penyulang: <?= $_SESSION['train_info']['total_penyulang'] ?> | 
+                                        Data Training: <?= $_SESSION['train_info']['training_data_count'] ?>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                    <?php unset($_SESSION['train_info']); ?>
+                                <?php endif; ?>
+
+                                <div class="row mt-4">
+                                    <div class="col-lg-3 col-md-6 mb-4">
+                                        <div class="card bg-primary text-white">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between">
+                                                    <div>
+                                                        <h4 class="mb-0"><?php echo $statistics['total_prediksi']; ?></h4>
+                                                        <p class="mb-0">Total Prediksi</p>
+                                                    </div>
+                                                    <div class="icon">
+                                                        <i class="mdi mdi-brain"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-lg-3 col-md-6 mb-4">
+                                        <div class="card bg-danger text-white">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between">
+                                                    <div>
+                                                        <h4 class="mb-0"><?php echo $statistics['tinggi_count']; ?></h4>
+                                                        <p class="mb-0">Risiko Tinggi (<?php echo $statistics['tinggi_percentage']; ?>%)</p>
+                                                    </div>
+                                                    <div class="icon">
+                                                        <i class="mdi mdi-alert"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-lg-3 col-md-6 mb-4">
+                                        <div class="card bg-warning text-white">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between">
+                                                    <div>
+                                                        <h4 class="mb-0"><?php echo $statistics['sedang_count']; ?></h4>
+                                                        <p class="mb-0">Risiko Sedang (<?php echo $statistics['sedang_percentage']; ?>%)</p>
+                                                    </div>
+                                                    <div class="icon">
+                                                        <i class="mdi mdi-alert-outline"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-lg-3 col-md-6 mb-4">
+                                        <div class="card bg-success text-white">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between">
+                                                    <div>
+                                                        <h4 class="mb-0"><?php echo $statistics['rendah_count']; ?></h4>
+                                                        <p class="mb-0">Risiko Rendah (<?php echo $statistics['rendah_percentage']; ?>%)</p>
+                                                    </div>
+                                                    <div class="icon">
+                                                        <i class="mdi mdi-check-circle"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <?php if (isset($_SESSION['success_message'])): ?>
-                                    <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-                                        <i class="mdi mdi-check-circle"></i> <?= htmlspecialchars($_SESSION['success_message']) ?>
-                                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                            <span aria-hidden="true">&times;</span>
-                                        </button>
-                                    </div>
-                                    <?php unset($_SESSION['success_message']); ?>
-                                <?php endif; ?>
-
-                                <?php if (isset($_SESSION['error_message'])): ?>
-                                    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                                        <i class="mdi mdi-alert-circle"></i> <?= htmlspecialchars($_SESSION['error_message']) ?>
-                                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                            <span aria-hidden="true">&times;</span>
-                                        </button>
-                                    </div>
-                                    <?php unset($_SESSION['error_message']); ?>
-                                <?php endif; ?>
-
-                                <div class="tab-content tab-content-basic">
-                                    <div class="tab-pane fade show active" id="overview" role="tabpanel" aria-labelledby="overview">
-                                        
-                                        <!-- Data Status Card -->
-                                        <div class="row">
-                                            <div class="col-md-12">
-                                                <div class="card">
-                                                    <div class="card-body">
-                                                        <h4 class="card-title">Status Data untuk Prediksi KNN</h4>
-                                                        <div class="row">
-                                                            <div class="col-md-3">
-                                                                <div class="d-flex align-items-center">
-                                                                    <i class="mdi mdi-database <?= isset($dataStatus) && $dataStatus['has_clustering'] ? 'text-success' : 'text-danger' ?> me-2"></i>
-                                                                    <div>
-                                                                        <h6 class="mb-0">Data Clustering</h6>
-                                                                        <small class="text-muted"><?= isset($dataStatus) ? $dataStatus['clustering_count'] : 0 ?> data</small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-3">
-                                                                <div class="d-flex align-items-center">
-                                                                    <i class="mdi mdi-content-cut <?= isset($dataStatus) && $dataStatus['has_split'] ? 'text-success' : 'text-danger' ?> me-2"></i>
-                                                                    <div>
-                                                                        <h6 class="mb-0">Data Split</h6>
-                                                                        <small class="text-muted"><?= isset($dataStatus) ? $dataStatus['split_count'] : 0 ?> data</small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-3">
-                                                                <div class="d-flex align-items-center">
-                                                                    <i class="mdi mdi-school text-info me-2"></i>
-                                                                    <div>
-                                                                        <h6 class="mb-0">Training Data</h6>
-                                                                        <small class="text-muted"><?= isset($dataStatus) ? $dataStatus['training_count'] : 0 ?> data</small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-3">
-                                                                <div class="d-flex align-items-center">
-                                                                    <i class="mdi mdi-test-tube text-warning me-2"></i>
-                                                                    <div>
-                                                                        <h6 class="mb-0">Testing Data</h6>
-                                                                        <small class="text-muted"><?= isset($dataStatus) ? $dataStatus['test_count'] : 0 ?> data</small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <?php if (isset($dataStatus) && !$dataStatus['ready_for_prediction']): ?>
-                                                            <div class="alert alert-warning mt-3">
-                                                                <i class="mdi mdi-alert"></i>
-                                                                Data belum siap untuk prediksi. Silakan lakukan 
-                                                                <a href="index.php?page=clustering" class="alert-link">clustering dan split data</a> terlebih dahulu.
-                                                            </div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
+                                <div class="row mb-4">
+                                    <div class="col-md-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h5 class="card-title mb-0">Training KNN</h5>
                                             </div>
-                                        </div>
-
-                                        <!-- KNN Prediction Form -->
-                                        <div class="row mt-4">
-                                            <div class="col-lg-6">
-                                                <div class="card">
-                                                    <div class="card-body">
-                                                        <h4 class="card-title">
-                                                            <i class="mdi mdi-chart-line"></i> Prediksi Risiko KNN
-                                                        </h4>
-                                                        <p class="card-description">
-                                                            Jalankan prediksi risiko menggunakan algoritma K-Nearest Neighbor
-                                                        </p>
-                                                        
-                                                        <form action="index.php?page=prediksi-process" method="post" id="prediksiForm">
+                                            <div class="card-body">
+                                                <form method="POST">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
                                                             <div class="form-group">
-                                                                <label for="k_value">Nilai K (Jumlah Tetangga Terdekat)</label>
-                                                                <select name="k_value" id="k_value" class="form-control" required>
-                                                                    <option value="3" selected>K = 3</option>
-                                                                    <option value="5">K = 5</option>
-                                                                    <option value="7">K = 7</option>
-                                                                    <option value="9">K = 9</option>
-                                                                    <option value="11">K = 11</option>
-                                                                    <option value="15">K = 15</option>
-                                                                </select>
-                                                                <small class="form-text text-muted">
-                                                                    Nilai K yang lebih kecil lebih sensitif terhadap noise, nilai K yang lebih besar lebih stabil
-                                                                </small>
+                                                                <label for="k_value">Nilai K (1-20):</label>
+                                                                <input type="number" class="form-control" id="k_value" name="k_value" 
+                                                                       value="<?php echo $statistics['last_k_value']; ?>" min="1" max="20" required>
+                                                                <small class="form-text text-muted">Masukkan nilai K untuk algoritma KNN</small>
                                                             </div>
-                                                            
-                                                            <button type="submit" class="btn btn-primary" id="prediksiBtn" 
-                                                                    <?= (isset($dataStatus) && !$dataStatus['ready_for_prediction']) ? 'disabled' : '' ?>>
-                                                                <i class="mdi mdi-play"></i> Jalankan Prediksi KNN
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="col-lg-6">
-                                                <div class="card">
-                                                    <div class="card-body">
-                                                        <h4 class="card-title">
-                                                            <i class="mdi mdi-information"></i> Informasi Algoritma
-                                                        </h4>
-                                                        
-                                                        <div class="row">
-                                                            <div class="col-12">
-                                                                <h6>K-Nearest Neighbor (KNN)</h6>
-                                                                <ul class="list-unstyled">
-                                                                    <li><small><strong>Data Training:</strong> Hasil clustering dengan label risiko</small></li>
-                                                                    <li><small><strong>Data Testing:</strong> Data dari split testing</small></li>
-                                                                    <li><small><strong>Features:</strong> 19 atribut pemeliharaan</small></li>
-                                                                    <li><small><strong>Distance:</strong> Euclidean Distance</small></li>
-                                                                    <li><small><strong>Classification:</strong> Majority voting dari K tetangga</small></li>
-                                                                </ul>
-                                                                
-                                                                <?php if (isset($lastPrediction) && $lastPrediction): ?>
-                                                                    <div class="border-top pt-3 mt-3">
-                                                                        <h6>Prediksi Terakhir</h6>
-                                                                        <small class="text-muted">
-                                                                            <i class="mdi mdi-calendar"></i> <?= $lastPrediction['tanggal_prediksi'] ?><br>
-                                                                            <i class="mdi mdi-chart-donut"></i> K = <?= $lastPrediction['k_value'] ?><br>
-                                                                            <i class="mdi mdi-database"></i> <?= $lastPrediction['total_predictions'] ?> prediksi
-                                                                        </small>
-                                                                    </div>
-                                                                <?php endif; ?>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="form-group">
+                                                                <label>&nbsp;</label>
+                                                                <div class="d-flex">
+                                                                    <button type="submit" name="action" value="train_knn" class="btn btn-primary me-2" 
+                                                                            onclick="return confirm('Mulai training KNN? Data prediksi sebelumnya akan dihapus.')">
+                                                                        <i class="mdi mdi-play"></i> Train KNN
+                                                                    </button>
+                                                                    <button type="submit" name="action" value="reset_data" class="btn btn-danger" 
+                                                                            onclick="return confirm('Reset semua data prediksi? Tindakan ini tidak dapat dibatalkan!')">
+                                                                        <i class="mdi mdi-refresh"></i> Reset Data
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </form>
+                                                <p class="text-muted mt-2">
+                                                    Training akan menggunakan data training dari split data untuk memprediksi tingkat risiko per penyulang.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <?php if (!empty($confusionMatrix['matrix'])): ?>
+                                <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h5 class="card-title mb-0">Confusion Matrix</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-bordered text-center">
+                                                        <thead class="table-dark">
+                                                            <tr>
+                                                                <th>Actual / Predicted</th>
+                                                                <?php foreach ($confusionMatrix['classes'] as $class): ?>
+                                                                    <th><?php echo $class; ?></th>
+                                                                <?php endforeach; ?>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <?php foreach ($confusionMatrix['classes'] as $actualClass): ?>
+                                                                <tr>
+                                                                    <th class="table-dark"><?php echo $actualClass; ?></th>
+                                                                    <?php foreach ($confusionMatrix['classes'] as $predictedClass): ?>
+                                                                        <td class="<?php echo $actualClass === $predictedClass ? 'table-success' : ''; ?>">
+                                                                            <?php echo $confusionMatrix['matrix'][$actualClass][$predictedClass]; ?>
+                                                                        </td>
+                                                                    <?php endforeach; ?>
+                                                                </tr>
+                                                            <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <?php if (isset($hasPrediction) && $hasPrediction): ?>
-                                            <!-- Summary Stats -->
-                                            <div class="row mt-4">
-                                                <div class="col-lg-12">
-                                                    <div class="card">
-                                                        <div class="card-body">
-                                                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                                                <h4 class="card-title mb-0">Ringkasan Hasil Prediksi</h4>
-                                                                <div>
-                                                                    <a href="index.php?page=prediksi-export-log" class="btn btn-sm btn-success">
-                                                                        <i class="mdi mdi-download"></i> Export CSV
-                                                                    </a>
-                                                                    <a href="index.php?page=prediksi-clear-log" class="btn btn-sm btn-danger" 
-                                                                       onclick="return confirm('Yakin ingin menghapus semua log prediksi?')">
-                                                                        <i class="mdi mdi-delete"></i> Clear Log
-                                                                    </a>
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            <?php if (!empty($predictionSummary)): ?>
-                                                                <div class="row">
-                                                                    <?php foreach ($predictionSummary as $summary): ?>
-                                                                        <div class="col-md-4">
-                                                                            <div class="card border-<?= 
-                                                                                $summary['tingkat_risiko'] == 'TINGGI' ? 'danger' : 
-                                                                                ($summary['tingkat_risiko'] == 'SEDANG' ? 'warning' : 'success') 
-                                                                            ?>">
-                                                                                <div class="card-body text-center">
-                                                                                    <h3 class="text-<?= 
-                                                                                        $summary['tingkat_risiko'] == 'TINGGI' ? 'danger' : 
-                                                                                        ($summary['tingkat_risiko'] == 'SEDANG' ? 'warning' : 'success') 
-                                                                                    ?>">
-                                                                                        <?= $summary['jumlah_penyulang'] ?>
-                                                                                    </h3>
-                                                                                    <h6>Risiko <?= $summary['tingkat_risiko'] ?></h6>
-                                                                                    <small class="text-muted">
-                                                                                        Rata-rata: <?= number_format($summary['rata_nilai_risiko'], 2) ?><br>
-                                                                                        Kegiatan: <?= number_format($summary['rata_total_kegiatan'], 0) ?>
-                                                                                    </small>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    <?php endforeach; ?>
-                                                                </div>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h5 class="card-title mb-0">Metrik Evaluasi</h5>
                                             </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <strong>Accuracy: <?php echo $confusionMatrix['accuracy']; ?>%</strong>
+                                                </div>
+                                                
+                                                <h6>Precision:</h6>
+                                                <ul class="list-unstyled">
+                                                    <?php foreach ($confusionMatrix['precision'] as $class => $value): ?>
+                                                        <li><?php echo $class; ?>: <?php echo $value; ?>%</li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                                
+                                                <h6>Recall:</h6>
+                                                <ul class="list-unstyled">
+                                                    <?php foreach ($confusionMatrix['recall'] as $class => $value): ?>
+                                                        <li><?php echo $class; ?>: <?php echo $value; ?>%</li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                                
+                                                <h6>F1-Score:</h6>
+                                                <ul class="list-unstyled">
+                                                    <?php foreach ($confusionMatrix['f1_score'] as $class => $value): ?>
+                                                        <li><?php echo $class; ?>: <?php echo $value; ?>%</li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
 
-                                            <!-- Results Table -->
-                                            <div class="row mt-4">
-                                                <div class="col-lg-12">
-                                                    <div class="card">
-                                                        <div class="card-body">
-                                                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                                                <h4 class="card-title mb-0">Hasil Prediksi Detail</h4>
-                                                                <div class="btn-group" role="group">
-                                                                    <a href="index.php?page=prediksi" class="btn btn-sm btn-outline-secondary <?= !isset($isFiltered) ? 'active' : '' ?>">
-                                                                        Semua
-                                                                    </a>
-                                                                    <a href="index.php?page=prediksi-filter&tingkat=TINGGI" class="btn btn-sm btn-outline-danger <?= (isset($filterTingkat) && $filterTingkat == 'TINGGI') ? 'active' : '' ?>">
-                                                                        Tinggi
-                                                                    </a>
-                                                                    <a href="index.php?page=prediksi-filter&tingkat=SEDANG" class="btn btn-sm btn-outline-warning <?= (isset($filterTingkat) && $filterTingkat == 'SEDANG') ? 'active' : '' ?>">
-                                                                        Sedang
-                                                                    </a>
-                                                                    <a href="index.php?page=prediksi-filter&tingkat=RENDAH" class="btn btn-sm btn-outline-success <?= (isset($filterTingkat) && $filterTingkat == 'RENDAH') ? 'active' : '' ?>">
-                                                                        Rendah
-                                                                    </a>
-                                                                </div>
-                                                            </div>
-
-                                                            <?php if (!empty($predictionResults)): ?>
-                                                                <div class="table-responsive">
-                                                                    <table class="table table-hover">
-                                                                        <thead>
-                                                                            <tr>
-                                                                                <th>No</th>
-                                                                                <th>Nama Penyulang</th>
-                                                                                <th>Tingkat Risiko</th>
-                                                                                <th>Nilai Risiko</th>
-                                                                                <th>Total Kegiatan</th>
-                                                                                <th>K Value</th>
-                                                                                <th>Tanggal Prediksi</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody>
-                                                                            <?php 
-                                                                            $no = 1;
-                                                                            foreach ($predictionResults as $result): 
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h5 class="card-title mb-0">Hasil Prediksi (<?php echo count($prediksiData); ?> data)</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-striped">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>ID</th>
+                                                                <th>Nama Penyulang</th>
+                                                                <th>Tingkat Risiko</th>
+                                                                <th>Nilai Risiko</th>
+                                                                <th>Total Kegiatan</th>
+                                                                <th>K Value</th>
+                                                                <th>Tanggal Prediksi</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <?php if (!empty($prediksiData)): ?>
+                                                                <?php foreach ($prediksiData as $row): ?>
+                                                                    <tr>
+                                                                        <td><?php echo htmlspecialchars($row['id_prediksi']); ?></td>
+                                                                        <td><?php echo htmlspecialchars($row['nama_penyulang']); ?></td>
+                                                                        <td>
+                                                                            <?php
+                                                                            $badgeClass = '';
+                                                                            switch (strtolower($row['tingkat_risiko'])) {
+                                                                                case 'tinggi':
+                                                                                    $badgeClass = 'bg-danger';
+                                                                                    break;
+                                                                                case 'sedang':
+                                                                                    $badgeClass = 'bg-warning';
+                                                                                    break;
+                                                                                default:
+                                                                                    $badgeClass = 'bg-success';
+                                                                            }
                                                                             ?>
-                                                                                <tr>
-                                                                                    <td><?= $no++ ?></td>
-                                                                                    <td><?= htmlspecialchars($result['nama_penyulang']) ?></td>
-                                                                                    <td>
-                                                                                        <span class="badge badge-<?= 
-                                                                                            $result['tingkat_risiko'] == 'TINGGI' ? 'danger' : 
-                                                                                            ($result['tingkat_risiko'] == 'SEDANG' ? 'warning' : 'success') 
-                                                                                        ?>">
-                                                                                            <?= $result['tingkat_risiko'] ?>
-                                                                                        </span>
-                                                                                    </td>
-                                                                                    <td><?= number_format($result['nilai_risiko'], 2) ?></td>
-                                                                                    <td><?= number_format($result['total_kegiatan']) ?></td>
-                                                                                    <td><?= $result['k_value'] ?></td>
-                                                                                    <td><?= $result['tanggal_prediksi'] ?></td>
-                                                                                </tr>
-                                                                            <?php endforeach; ?>
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
+                                                                            <span class="badge <?php echo $badgeClass; ?>">
+                                                                                <?php echo htmlspecialchars($row['tingkat_risiko']); ?>
+                                                                            </span>
+                                                                        </td>
+                                                                        <td><?php echo number_format($row['nilai_risiko'], 2); ?></td>
+                                                                        <td><?php echo number_format($row['total_kegiatan']); ?></td>
+                                                                        <td>
+                                                                            <span class="badge bg-info">
+                                                                                K=<?php echo $row['k_value']; ?>
+                                                                            </span>
+                                                                        </td>
+                                                                        <td><?php echo date('d/m/Y H:i', strtotime($row['tanggal_prediksi'])); ?></td>
+                                                                    </tr>
+                                                                <?php endforeach; ?>
                                                             <?php else: ?>
-                                                                <div class="text-center py-4">
-                                                                    <i class="mdi mdi-chart-line-stacked display-4 text-muted"></i>
-                                                                    <p class="text-muted mt-2">Belum ada hasil prediksi</p>
-                                                                </div>
+                                                                <tr>
+                                                                    <td colspan="7" class="text-center">
+                                                                        <div class="py-4">
+                                                                            <i class="mdi mdi-brain mdi-48px text-muted"></i>
+                                                                            <p class="text-muted mt-2">Belum ada data prediksi. Jalankan training KNN terlebih dahulu.</p>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
                                                             <?php endif; ?>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                
+                                                <?php if (!empty($prediksiData)): ?>
+                                                <div class="mt-3">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted">
+                                                                Rata-rata Risk Score: <?php echo $statistics['avg_risk_score']; ?> | 
+                                                                Rata-rata Total Kegiatan: <?php echo $statistics['avg_total_kegiatan']; ?>
+                                                            </small>
+                                                        </div>
+                                                        <div class="col-md-6 text-end">
+                                                            <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
+                                                                <i class="mdi mdi-refresh"></i> Refresh
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
+                                                <?php endif; ?>
                                             </div>
-                                        <?php endif; ?>
-
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -305,26 +410,27 @@
             </div>
         </div>
     </div>
-
+    
     <script>
-        document.getElementById('prediksiForm').addEventListener('submit', function(e) {
-            const btn = document.getElementById('prediksiBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Processing...';
-        });
+        function refreshData() {
+            location.reload();
+        }
 
-        setTimeout(function() {
-            const alerts = document.querySelectorAll('.alert');
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert-dismissible');
             alerts.forEach(function(alert) {
-                alert.style.transition = 'opacity 0.5s';
-                alert.style.opacity = '0';
                 setTimeout(function() {
-                    alert.remove();
-                }, 500);
+                    if (alert && alert.parentNode) {
+                        alert.classList.remove('show');
+                        setTimeout(function() {
+                            if (alert && alert.parentNode) {
+                                alert.remove();
+                            }
+                        }, 150);
+                    }
+                }, 5000);
             });
-        }, 5000);
+        });
     </script>
-
-    <?php include 'view/template/script.php'; ?>
 </body>
 </html>
