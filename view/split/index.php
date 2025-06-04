@@ -319,32 +319,7 @@ include('view/template/header.php');
                                     </div>
                                 </div>
 
-                                <!-- Export Buttons -->
-                                <?php if ($statistics['total_data'] > 0): ?>
-                                <div class="row mb-4">
-                                    <div class="col-md-12">
-                                        <div class="card">
-                                            <div class="card-header">
-                                                <h5 class="card-title mb-0">Export Data</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <a href="?action=exportTrainData" class="btn btn-success">
-                                                            <i class="mdi mdi-download"></i> Export Training Data
-                                                        </a>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <a href="?action=exportTestData" class="btn btn-warning">
-                                                            <i class="mdi mdi-download"></i> Export Testing Data
-                                                        </a>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <?php endif; ?>
+                               
 
                                 <!-- Results Table -->
                                 <div class="row">

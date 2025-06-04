@@ -317,12 +317,17 @@ include('view/template/header.php');
                                 <div class="row">
                                     <div class="col-md-12">
                                         <div class="card">
-                                            <div class="card-header">
+                                            <div class="card-header d-flex justify-content-between align-items-center">
                                                 <h5 class="card-title mb-0">Hasil Prediksi (<?php echo count($prediksiData); ?> data)</h5>
+                                                <?php if (!empty($prediksiData)): ?>
+                                                    <button type="button" class="btn btn-success" onclick="exportToPDF()">
+                                                        <i class="mdi mdi-file-pdf"></i> Export PDF
+                                                    </button>
+                                                <?php endif; ?>
                                             </div>
                                             <div class="card-body">
                                                 <div class="table-responsive">
-                                                    <table class="table table-striped">
+                                                    <table class="table table-striped" id="table-prediksi">
                                                         <thead>
                                                             <tr>
                                                                 <th>ID</th>
@@ -411,9 +416,116 @@ include('view/template/header.php');
         </div>
     </div>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
     <script>
         function refreshData() {
             location.reload();
+        }
+
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const currentDate = new Date().toLocaleDateString('id-ID', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            
+            doc.setFontSize(18);
+            doc.setFont(undefined, 'bold');
+            doc.text('LAPORAN HASIL PREDIKSI RISIKO KNN', 105, 20, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Tanggal: ${currentDate}`, 14, 35);
+            
+            const statistics = {
+                total: <?php echo $statistics['total_prediksi']; ?>,
+                tinggi: <?php echo $statistics['tinggi_count']; ?>,
+                sedang: <?php echo $statistics['sedang_count']; ?>,
+                rendah: <?php echo $statistics['rendah_count']; ?>,
+                tinggiPct: <?php echo $statistics['tinggi_percentage']; ?>,
+                sedangPct: <?php echo $statistics['sedang_percentage']; ?>,
+                rendahPct: <?php echo $statistics['rendah_percentage']; ?>,
+                avgRisk: <?php echo $statistics['avg_risk_score']; ?>,
+                avgKegiatan: <?php echo $statistics['avg_total_kegiatan']; ?>
+            };
+            
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('RINGKASAN STATISTIK', 14, 50);
+            
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Total Prediksi: ${statistics.total}`, 14, 60);
+            doc.text(`Risiko Tinggi: ${statistics.tinggi} (${statistics.tinggiPct}%)`, 14, 68);
+            doc.text(`Risiko Sedang: ${statistics.sedang} (${statistics.sedangPct}%)`, 14, 76);
+            doc.text(`Risiko Rendah: ${statistics.rendah} (${statistics.rendahPct}%)`, 14, 84);
+            doc.text(`Rata-rata Risk Score: ${statistics.avgRisk}`, 14, 92);
+            doc.text(`Rata-rata Total Kegiatan: ${statistics.avgKegiatan}`, 14, 100);
+            
+            const tableData = [];
+            <?php if (!empty($prediksiData)): ?>
+                <?php foreach ($prediksiData as $row): ?>
+                    tableData.push([
+                        '<?php echo $row['id_prediksi']; ?>',
+                        '<?php echo htmlspecialchars($row['nama_penyulang']); ?>',
+                        '<?php echo $row['tingkat_risiko']; ?>',
+                        '<?php echo number_format($row['nilai_risiko'], 2); ?>',
+                        '<?php echo number_format($row['total_kegiatan']); ?>',
+                        'K=<?php echo $row['k_value']; ?>',
+                        '<?php echo date('d/m/Y H:i', strtotime($row['tanggal_prediksi'])); ?>'
+                    ]);
+                <?php endforeach; ?>
+            <?php endif; ?>
+            
+            doc.autoTable({
+                head: [['ID', 'Nama Penyulang', 'Tingkat Risiko', 'Nilai Risiko', 'Total Kegiatan', 'K Value', 'Tanggal Prediksi']],
+                body: tableData,
+                startY: 110,
+                styles: {
+                    fontSize: 8,
+                    cellPadding: 2
+                },
+                headStyles: {
+                    fillColor: [52, 58, 64],
+                    textColor: 255,
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [248, 249, 250]
+                },
+                didParseCell: function(data) {
+                    if (data.column.index === 2 && data.section === 'body') {
+                        const risikoValue = data.cell.text[0].toLowerCase();
+                        if (risikoValue === 'tinggi') {
+                            data.cell.styles.fillColor = [220, 53, 69];
+                            data.cell.styles.textColor = 255;
+                        } else if (risikoValue === 'sedang') {
+                            data.cell.styles.fillColor = [255, 193, 7];
+                            data.cell.styles.textColor = 0;
+                        } else if (risikoValue === 'rendah') {
+                            data.cell.styles.fillColor = [25, 135, 84];
+                            data.cell.styles.textColor = 255;
+                        }
+                    }
+                }
+            });
+            
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.text(`Halaman ${i} dari ${pageCount}`, 200, 285, { align: 'right' });
+                doc.text('Generated by Sistem Prediksi Risiko KNN', 14, 285);
+            }
+            
+            const fileName = `Laporan_Prediksi_KNN_${new Date().toISOString().slice(0, 10)}.pdf`;
+            doc.save(fileName);
         }
 
         document.addEventListener('DOMContentLoaded', function() {
