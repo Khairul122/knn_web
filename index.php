@@ -39,7 +39,8 @@ if ($controller && $action) {
         'prediksi' => 'PrediksiController',
         'pemeliharaan' => 'PemeliharaanController',
         'gardu' => 'GarduController',
-        'sutm' => 'SutmController'
+        'sutm' => 'SutmController',
+        'cluster' => 'ClusterController'
     ];
     
     if (isset($controller_mapping[$controller])) {
@@ -51,14 +52,29 @@ if ($controller && $action) {
             if (class_exists($controller_name)) {
                 $controller_instance = new $controller_name();
                 if (method_exists($controller_instance, $action)) {
-                    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                        $controller_instance->$action($_POST);
-                    } else {
-                        $controller_instance->$action();
+                    try {
+                        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                            $controller_instance->$action($_POST);
+                        } else {
+                            $controller_instance->$action();
+                        }
+                    } catch (Exception $e) {
+                        error_log("Controller action error: " . $e->getMessage());
+                        echo "<div class='alert alert-danger'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
                     }
+                    exit;
+                } else {
+                    error_log("Method {$action} not found in {$controller_name}");
+                    header("HTTP/1.0 404 Not Found");
+                    include 'view/404.php';
                     exit;
                 }
             }
+        } else {
+            error_log("Controller file not found: {$controller_path}");
+            header("HTTP/1.0 404 Not Found");
+            include 'view/404.php';
+            exit;
         }
     }
 }
@@ -86,14 +102,9 @@ $page_mapping = [
 
     'data-pemeliharaan' => ['controller' => 'PemeliharaanController', 'method' => 'index'],
 
-    'clustering' => ['controller' => 'ClusteringController', 'method' => 'index'],
-    'clustering-perform' => ['controller' => 'ClusteringController', 'method' => 'performClustering'],
-    'clustering-split' => ['controller' => 'ClusteringController', 'method' => 'splitData'],
-    'clustering-results' => ['controller' => 'ClusteringController', 'method' => 'viewResults'],
-    'clustering-split-data' => ['controller' => 'ClusteringController', 'method' => 'viewSplitData'],
-    'clustering-export-results' => ['controller' => 'ClusteringController', 'method' => 'exportClusteringResults'],
-    'clustering-export-split' => ['controller' => 'ClusteringController', 'method' => 'exportSplitData'],
-    'clustering-stats' => ['controller' => 'ClusteringController', 'method' => 'getStats'],
+    'cluster' => ['controller' => 'ClusterController', 'method' => 'index'],
+    
+    'split-data' => ['controller' => 'ClusteringController', 'method' => 'splitData'],
 
     'prediksi' => ['controller' => 'PrediksiController', 'method' => 'index'],
     'prediksi-process' => ['controller' => 'PrediksiController', 'method' => 'process'],
@@ -124,8 +135,18 @@ if (isset($page_mapping[$page])) {
                     $controller_instance->$method_name();
                 }
                 exit;
+            } else {
+                error_log("Method {$method_name} not found in {$controller_name}");
+                header("HTTP/1.0 404 Not Found");
+                include 'view/404.php';
+                exit;
             }
         }
+    } else {
+        error_log("Controller file not found for page {$page}: {$controller_path}");
+        header("HTTP/1.0 404 Not Found");
+        include 'view/404.php';
+        exit;
     }
 }
 
@@ -151,4 +172,5 @@ if (count($parts) > 0) {
     }
 }
 
+error_log("No route found for page: {$page}, controller: {$controller}, action: {$action}");
 include 'view/404.php';
