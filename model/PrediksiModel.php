@@ -172,6 +172,51 @@ class PrediksiModel {
         ];
     }
 
+    private function aggregatePenyulangPredictions($predictions)
+    {
+        $penyulangGroups = [];
+        
+        foreach ($predictions as $prediction) {
+            $penyulang = $prediction['nama_penyulang'];
+            
+            if (!isset($penyulangGroups[$penyulang])) {
+                $penyulangGroups[$penyulang] = [
+                    'predictions' => [],
+                    'risk_scores' => [],
+                    'total_kegiatan' => [],
+                    'confidences' => []
+                ];
+            }
+            
+            $penyulangGroups[$penyulang]['predictions'][] = $prediction['predicted'];
+            $penyulangGroups[$penyulang]['risk_scores'][] = $prediction['avg_risk_score'];
+            $penyulangGroups[$penyulang]['total_kegiatan'][] = $prediction['total_kegiatan'];
+            $penyulangGroups[$penyulang]['confidences'][] = $prediction['confidence'];
+        }
+        
+        $aggregatedResults = [];
+        
+        foreach ($penyulangGroups as $penyulang => $group) {
+            $predictionCounts = array_count_values($group['predictions']);
+            $finalPrediction = array_search(max($predictionCounts), $predictionCounts);
+            $avgRiskScore = array_sum($group['risk_scores']) / count($group['risk_scores']);
+            $avgTotalKegiatan = array_sum($group['total_kegiatan']) / count($group['total_kegiatan']);
+            $avgConfidence = array_sum($group['confidences']) / count($group['confidences']);
+            
+            $aggregatedResults[] = [
+                'nama_penyulang' => $penyulang,
+                'final_prediction' => $finalPrediction,
+                'avg_risk_score' => $avgRiskScore,
+                'avg_total_kegiatan' => round($avgTotalKegiatan),
+                'avg_confidence' => $avgConfidence,
+                'prediction_counts' => $predictionCounts,
+                'total_instances' => count($group['predictions'])
+            ];
+        }
+        
+        return $aggregatedResults;
+    }
+
     public function trainKNN($k_value)
     {
         try {
@@ -212,12 +257,16 @@ class PrediksiModel {
                     'avg_risk_score' => $prediction['avg_risk_score'],
                     'total_kegiatan' => $testPoint['total_kegiatan']
                 ];
-                
+            }
+            
+            $aggregatedPredictions = $this->aggregatePenyulangPredictions($predictions);
+            
+            foreach ($aggregatedPredictions as $aggPred) {
                 $stmt->bind_param("ssdii", 
-                    $testPoint['nama_penyulang'], 
-                    $prediction['class'], 
-                    $prediction['avg_risk_score'], 
-                    $testPoint['total_kegiatan'], 
+                    $aggPred['nama_penyulang'], 
+                    $aggPred['final_prediction'], 
+                    $aggPred['avg_risk_score'], 
+                    $aggPred['avg_total_kegiatan'], 
                     $k_value
                 );
                 
@@ -232,12 +281,14 @@ class PrediksiModel {
                 $this->db->commit();
                 return [
                     'success' => true,
-                    'message' => 'Training KNN klasik berhasil dilakukan',
+                    'message' => 'Training KNN klasik dengan agregasi berhasil dilakukan',
                     'total_penyulang' => $successCount,
                     'k_value' => $k_value,
                     'training_data_count' => count($trainingData),
                     'test_data_count' => count($testData),
-                    'predictions' => $predictions
+                    'raw_predictions' => count($predictions),
+                    'aggregated_predictions' => $aggregatedPredictions,
+                    'individual_predictions' => $predictions
                 ];
             } else {
                 $this->db->rollback();
@@ -343,9 +394,21 @@ class PrediksiModel {
             ];
         }
         
-        $actualByPenyulang = [];
+        $testDataAggregated = [];
         foreach ($testData as $data) {
-            $actualByPenyulang[$data['nama_penyulang']] = strtoupper($data['tingkat_risiko']);
+            $penyulang = $data['nama_penyulang'];
+            $tingkatRisiko = strtoupper($data['tingkat_risiko']);
+            
+            if (!isset($testDataAggregated[$penyulang])) {
+                $testDataAggregated[$penyulang] = [];
+            }
+            $testDataAggregated[$penyulang][] = $tingkatRisiko;
+        }
+        
+        $actualByPenyulang = [];
+        foreach ($testDataAggregated as $penyulang => $risks) {
+            $riskCounts = array_count_values($risks);
+            $actualByPenyulang[$penyulang] = array_search(max($riskCounts), $riskCounts);
         }
         
         $predictedByPenyulang = [];
