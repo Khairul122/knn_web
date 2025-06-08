@@ -233,7 +233,7 @@ class PrediksiModel {
                 return [
                     'success' => true,
                     'message' => 'Training KNN klasik berhasil dilakukan',
-                    'total_predictions' => $successCount,
+                    'total_penyulang' => $successCount,
                     'k_value' => $k_value,
                     'training_data_count' => count($trainingData),
                     'test_data_count' => count($testData),
