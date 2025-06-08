@@ -67,6 +67,111 @@ class PrediksiModel {
         return $data;
     }
 
+    public function getTestData()
+    {
+        $query = "
+            SELECT 
+                dp.nama_objek,
+                hc.cluster_label,
+                hc.risk_score,
+                hc.tingkat_risiko,
+                CASE 
+                    WHEN dp.nama_objek = 'gardu' THEN g.nama_penyulang
+                    WHEN dp.nama_objek = 'sutm' THEN s.nama_penyulang
+                    ELSE 'Unknown'
+                END as nama_penyulang,
+                CASE 
+                    WHEN dp.nama_objek = 'gardu' THEN 
+                        (g.t1_inspeksi + g.t1_realisasi + g.t2_inspeksi + g.t2_realisasi + 
+                         g.pengukuran + g.pergantian_arrester + g.pergantian_fco + 
+                         g.relokasi_gardu + g.pembangunan_gardu_siapan + g.penyimbang_beban_gardu + 
+                         g.pemecahan_beban_gardu + g.perubahan_tap_charger_trafo + g.pergantian_box + 
+                         g.pergantian_opstic + g.perbaikan_grounding + g.accesoris_gardu + 
+                         g.pergantian_kabel_isolasi + g.pemasangan_cover_isolasi + 
+                         g.pemasangan_penghalang_panjat + g.alat_ultrasonik)
+                    WHEN dp.nama_objek = 'sutm' THEN 
+                        (s.t1_inspeksi + s.t1_realisasi + s.t2_inspeksi + s.t2_realisasi + 
+                         s.pangkas_kms + s.pangkas_batang + s.tebang + s.pin_isolator + 
+                         s.suspension_isolator + s.traves_dan_armtie + s.tiang + s.accesoris_sutm + 
+                         s.arrester_sutm + s.fco_sutm + s.grounding_sutm + s.perbaikan_andong_kendor + 
+                         s.kawat_terburai + s.jamperan_sutm + s.skur + s.ganti_kabel_isolasi + 
+                         s.pemasangan_cover_isolasi + s.pemasangan_penghalang_panjang + s.alat_ultrasonik)
+                    ELSE 0
+                END as total_kegiatan
+            FROM split_data sd
+            JOIN data_pemeliharaan dp ON sd.id_data_pemeliharaan = dp.id_data_pemeliharaan
+            JOIN hasil_cluster hc ON sd.id_cluster = hc.id_cluster
+            LEFT JOIN gardu g ON dp.nama_objek = 'gardu' AND dp.id_sub_kategori = g.id_gardu
+            LEFT JOIN sutm s ON dp.nama_objek = 'sutm' AND dp.id_sub_kategori = s.id_sutm
+            WHERE sd.tipe_data = 'test'
+            ORDER BY sd.id_split
+        ";
+        
+        $result = $this->db->query($query);
+        if (!$result) {
+            throw new Exception("Failed to get test data: " . $this->db->error);
+        }
+        
+        $data = [];
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+        
+        return $data;
+    }
+
+    private function calculateDistance($point1, $point2)
+    {
+        $riskDiff = $point1['risk_score'] - $point2['risk_score'];
+        $activityDiff = $point1['total_kegiatan'] - $point2['total_kegiatan'];
+        
+        return sqrt(pow($riskDiff, 2) + pow($activityDiff, 2));
+    }
+
+    private function findNearestNeighbors($testPoint, $trainingData, $k)
+    {
+        $distances = [];
+        
+        foreach ($trainingData as $trainPoint) {
+            $distance = $this->calculateDistance($testPoint, $trainPoint);
+            $distances[] = [
+                'distance' => $distance,
+                'tingkat_risiko' => $trainPoint['tingkat_risiko'],
+                'risk_score' => $trainPoint['risk_score']
+            ];
+        }
+        
+        usort($distances, function($a, $b) {
+            return $a['distance'] <=> $b['distance'];
+        });
+        
+        return array_slice($distances, 0, $k);
+    }
+
+    private function predictClass($neighbors)
+    {
+        $votes = ['RENDAH' => 0, 'SEDANG' => 0, 'TINGGI' => 0];
+        $riskSum = 0;
+        
+        foreach ($neighbors as $neighbor) {
+            $risk = strtoupper($neighbor['tingkat_risiko']);
+            if (isset($votes[$risk])) {
+                $votes[$risk]++;
+            }
+            $riskSum += $neighbor['risk_score'];
+        }
+        
+        $maxVotes = max($votes);
+        $predictedClass = array_search($maxVotes, $votes);
+        $avgRiskScore = $riskSum / count($neighbors);
+        
+        return [
+            'class' => $predictedClass,
+            'confidence' => $maxVotes / count($neighbors),
+            'avg_risk_score' => $avgRiskScore
+        ];
+    }
+
     public function trainKNN($k_value)
     {
         try {
@@ -75,32 +180,14 @@ class PrediksiModel {
             $this->clearPrediksiData();
             
             $trainingData = $this->getTrainingData();
+            $testData = $this->getTestData();
             
             if (empty($trainingData)) {
                 throw new Exception("Tidak ada data training. Silakan lakukan split data terlebih dahulu.");
             }
             
-            $penyulangStats = [];
-            
-            foreach ($trainingData as $data) {
-                $penyulang = $data['nama_penyulang'];
-                
-                if (!isset($penyulangStats[$penyulang])) {
-                    $penyulangStats[$penyulang] = [
-                        'tinggi' => 0,
-                        'sedang' => 0,
-                        'rendah' => 0,
-                        'total_kegiatan' => 0,
-                        'total_risk_score' => 0,
-                        'count' => 0
-                    ];
-                }
-                
-                $tingkatRisiko = strtolower($data['tingkat_risiko']);
-                $penyulangStats[$penyulang][$tingkatRisiko]++;
-                $penyulangStats[$penyulang]['total_kegiatan'] += (float)$data['total_kegiatan'];
-                $penyulangStats[$penyulang]['total_risk_score'] += (float)$data['risk_score'];
-                $penyulangStats[$penyulang]['count']++;
+            if (empty($testData)) {
+                throw new Exception("Tidak ada data testing. Silakan lakukan split data terlebih dahulu.");
             }
             
             $insertQuery = "INSERT INTO hasil_prediksi_risiko (nama_penyulang, tingkat_risiko, nilai_risiko, total_kegiatan, k_value) VALUES (?, ?, ?, ?, ?)";
@@ -111,22 +198,28 @@ class PrediksiModel {
             }
             
             $successCount = 0;
+            $predictions = [];
             
-            foreach ($penyulangStats as $penyulang => $stats) {
-                $avgRiskScore = $stats['total_risk_score'] / $stats['count'];
-                $avgTotalKegiatan = (int)($stats['total_kegiatan'] / $stats['count']);
+            foreach ($testData as $testPoint) {
+                $neighbors = $this->findNearestNeighbors($testPoint, $trainingData, $k_value);
+                $prediction = $this->predictClass($neighbors);
                 
-                $maxCount = max($stats['tinggi'], $stats['sedang'], $stats['rendah']);
+                $predictions[] = [
+                    'nama_penyulang' => $testPoint['nama_penyulang'],
+                    'predicted' => $prediction['class'],
+                    'actual' => strtoupper($testPoint['tingkat_risiko']),
+                    'confidence' => $prediction['confidence'],
+                    'avg_risk_score' => $prediction['avg_risk_score'],
+                    'total_kegiatan' => $testPoint['total_kegiatan']
+                ];
                 
-                if ($stats['tinggi'] == $maxCount) {
-                    $predictedRisk = 'TINGGI';
-                } elseif ($stats['sedang'] == $maxCount) {
-                    $predictedRisk = 'SEDANG';
-                } else {
-                    $predictedRisk = 'RENDAH';
-                }
-                
-                $stmt->bind_param("ssdii", $penyulang, $predictedRisk, $avgRiskScore, $avgTotalKegiatan, $k_value);
+                $stmt->bind_param("ssdii", 
+                    $testPoint['nama_penyulang'], 
+                    $prediction['class'], 
+                    $prediction['avg_risk_score'], 
+                    $testPoint['total_kegiatan'], 
+                    $k_value
+                );
                 
                 if ($stmt->execute()) {
                     $successCount++;
@@ -139,10 +232,12 @@ class PrediksiModel {
                 $this->db->commit();
                 return [
                     'success' => true,
-                    'message' => 'Training KNN berhasil dilakukan',
-                    'total_penyulang' => $successCount,
+                    'message' => 'Training KNN klasik berhasil dilakukan',
+                    'total_predictions' => $successCount,
                     'k_value' => $k_value,
-                    'training_data_count' => count($trainingData)
+                    'training_data_count' => count($trainingData),
+                    'test_data_count' => count($testData),
+                    'predictions' => $predictions
                 ];
             } else {
                 $this->db->rollback();
@@ -235,10 +330,10 @@ class PrediksiModel {
 
     public function getConfusionMatrix()
     {
-        $trainingData = $this->getTrainingData();
+        $testData = $this->getTestData();
         $prediksiData = $this->getPrediksiData();
         
-        if (empty($trainingData) || empty($prediksiData)) {
+        if (empty($testData) || empty($prediksiData)) {
             return [
                 'matrix' => [],
                 'accuracy' => 0,
@@ -249,12 +344,8 @@ class PrediksiModel {
         }
         
         $actualByPenyulang = [];
-        foreach ($trainingData as $data) {
-            $penyulang = $data['nama_penyulang'];
-            if (!isset($actualByPenyulang[$penyulang])) {
-                $actualByPenyulang[$penyulang] = [];
-            }
-            $actualByPenyulang[$penyulang][] = strtoupper($data['tingkat_risiko']);
+        foreach ($testData as $data) {
+            $actualByPenyulang[$data['nama_penyulang']] = strtoupper($data['tingkat_risiko']);
         }
         
         $predictedByPenyulang = [];
@@ -267,12 +358,9 @@ class PrediksiModel {
         $total = 0;
         $correct = 0;
         
-        foreach ($actualByPenyulang as $penyulang => $actualClasses) {
+        foreach ($actualByPenyulang as $penyulang => $actual) {
             if (isset($predictedByPenyulang[$penyulang])) {
                 $predicted = $predictedByPenyulang[$penyulang];
-                $mostFrequentActual = array_count_values($actualClasses);
-                arsort($mostFrequentActual);
-                $actual = array_key_first($mostFrequentActual);
                 
                 $matrix[$actual][$predicted]++;
                 $total++;
@@ -308,34 +396,19 @@ class PrediksiModel {
             'precision' => $precision,
             'recall' => $recall,
             'f1_score' => $f1_score,
-            'classes' => $classes
+            'classes' => $classes,
+            'total_samples' => $total,
+            'correct_predictions' => $correct
         ];
     }
 
     public function getOverfittingAnalysis()
     {
-        $trainingData = $this->getTrainingData();
+        $confusionMatrix = $this->getConfusionMatrix();
         $prediksiData = $this->getPrediksiData();
         
-        if (empty($trainingData) || empty($prediksiData)) {
+        if (empty($prediksiData)) {
             return ['status' => 'no_data'];
-        }
-        
-        $trainDistribution = ['RENDAH' => 0, 'SEDANG' => 0, 'TINGGI' => 0];
-        $predDistribution = ['RENDAH' => 0, 'SEDANG' => 0, 'TINGGI' => 0];
-        
-        foreach ($trainingData as $data) {
-            $risk = strtoupper($data['tingkat_risiko']);
-            if (isset($trainDistribution[$risk])) {
-                $trainDistribution[$risk]++;
-            }
-        }
-        
-        foreach ($prediksiData as $data) {
-            $risk = strtoupper($data['tingkat_risiko']);
-            if (isset($predDistribution[$risk])) {
-                $predDistribution[$risk]++;
-            }
         }
         
         $riskScores = array_column($prediksiData, 'nilai_risiko');
@@ -347,31 +420,9 @@ class PrediksiModel {
         $variance = $variance / count($riskScores);
         $stdDev = sqrt($variance);
         
-        $penyulangAnalysis = [];
-        foreach ($prediksiData as $pred) {
-            $penyulang = $pred['nama_penyulang'];
-            $trainRecords = array_filter($trainingData, function($train) use ($penyulang) {
-                return $train['nama_penyulang'] === $penyulang;
-            });
-            
-            $penyulangAnalysis[$penyulang] = [
-                'predicted_risk' => $pred['tingkat_risiko'],
-                'train_record_count' => count($trainRecords),
-                'risk_distribution' => ['RENDAH' => 0, 'SEDANG' => 0, 'TINGGI' => 0]
-            ];
-            
-            foreach ($trainRecords as $record) {
-                $risk = strtoupper($record['tingkat_risiko']);
-                if (isset($penyulangAnalysis[$penyulang]['risk_distribution'][$risk])) {
-                    $penyulangAnalysis[$penyulang]['risk_distribution'][$risk]++;
-                }
-            }
-        }
-        
         $overfittingScore = 0;
         $warnings = [];
         
-        $confusionMatrix = $this->getConfusionMatrix();
         if ($confusionMatrix['accuracy'] > 95) {
             $overfittingScore += 30;
             $warnings[] = 'Accuracy terlalu tinggi (' . $confusionMatrix['accuracy'] . '%) - kemungkinan overfitting';
@@ -382,20 +433,17 @@ class PrediksiModel {
             $warnings[] = 'Variance prediksi terlalu rendah (σ=' . round($stdDev, 2) . ') - model mungkin terlalu simple';
         }
         
-        $unbalancedCount = 0;
-        foreach ($penyulangAnalysis as $analysis) {
-            if ($analysis['train_record_count'] < 5) {
-                $unbalancedCount++;
+        $perfectPredictions = 0;
+        foreach ($confusionMatrix['classes'] as $class) {
+            if ($confusionMatrix['matrix'][$class][$class] == array_sum($confusionMatrix['matrix'][$class])) {
+                $perfectPredictions++;
             }
         }
         
-        if ($unbalancedCount > count($penyulangAnalysis) * 0.3) {
+        if ($perfectPredictions >= 2) {
             $overfittingScore += 25;
-            $warnings[] = 'Banyak penyulang dengan data training sedikit (<5 records)';
+            $warnings[] = 'Beberapa kelas memiliki perfect recall - kemungkinan overfitting';
         }
-        
-        $overfittingScore += 15;
-        $warnings[] = 'Data training dan testing dari periode yang sama - potensi data leakage';
         
         $riskLevel = 'LOW';
         if ($overfittingScore > 70) {
@@ -409,14 +457,15 @@ class PrediksiModel {
             'overfitting_score' => $overfittingScore,
             'risk_level' => $riskLevel,
             'warnings' => $warnings,
-            'train_distribution' => $trainDistribution,
-            'pred_distribution' => $predDistribution,
             'variance_analysis' => [
                 'mean_risk' => round($meanRisk, 2),
                 'std_dev' => round($stdDev, 2),
                 'variance' => round($variance, 2)
             ],
-            'penyulang_analysis' => $penyulangAnalysis,
+            'model_performance' => [
+                'accuracy' => $confusionMatrix['accuracy'],
+                'total_predictions' => count($prediksiData)
+            ],
             'recommendations' => $this->getOverfittingRecommendations($overfittingScore, $riskLevel)
         ];
     }
@@ -427,20 +476,22 @@ class PrediksiModel {
         
         if ($riskLevel === 'HIGH') {
             $recommendations[] = 'Gunakan Cross-Validation untuk evaluasi yang lebih robust';
-            $recommendations[] = 'Pisahkan data berdasarkan periode waktu (temporal split)';
-            $recommendations[] = 'Tingkatkan nilai K (coba K=5 atau K=7)';
-            $recommendations[] = 'Tambahkan regularization atau feature selection';
+            $recommendations[] = 'Coba nilai K yang lebih besar (K=7 atau K=9)';
+            $recommendations[] = 'Tambahkan noise atau regularization pada features';
+            $recommendations[] = 'Periksa apakah ada data leakage antara training dan test set';
         } elseif ($riskLevel === 'MEDIUM') {
             $recommendations[] = 'Monitor performa model pada data baru';
             $recommendations[] = 'Coba variasi nilai K yang berbeda';
             $recommendations[] = 'Validasi hasil dengan expert domain';
+            $recommendations[] = 'Pertimbangkan feature selection atau dimensionality reduction';
         } else {
             $recommendations[] = 'Model terlihat sehat, monitor terus performa';
             $recommendations[] = 'Dokumentasikan assumption dan limitation model';
+            $recommendations[] = 'Lakukan evaluasi berkala dengan data baru';
         }
         
-        $recommendations[] = 'Implementasikan validation set terpisah';
-        $recommendations[] = 'Lakukan feature importance analysis';
+        $recommendations[] = 'Implementasikan stratified sampling untuk split data';
+        $recommendations[] = 'Pertimbangkan ensemble methods untuk meningkatkan robustness';
         
         return $recommendations;
     }
@@ -448,6 +499,7 @@ class PrediksiModel {
     public function getDataStatus()
     {
         $trainingCount = 0;
+        $testCount = 0;
         $prediksiCount = 0;
         
         try {
@@ -458,20 +510,29 @@ class PrediksiModel {
                 $trainingCount = $row['count'];
             }
             
-            $query2 = "SELECT COUNT(*) as count FROM hasil_prediksi_risiko";
+            $query2 = "SELECT COUNT(*) as count FROM split_data WHERE tipe_data = 'test'";
             $result2 = $this->db->query($query2);
             if ($result2) {
                 $row2 = $result2->fetch_assoc();
-                $prediksiCount = $row2['count'];
+                $testCount = $row2['count'];
+            }
+            
+            $query3 = "SELECT COUNT(*) as count FROM hasil_prediksi_risiko";
+            $result3 = $this->db->query($query3);
+            if ($result3) {
+                $row3 = $result3->fetch_assoc();
+                $prediksiCount = $row3['count'];
             }
         } catch (Exception $e) {
         }
         
         return [
             'training_data_available' => $trainingCount > 0,
+            'test_data_available' => $testCount > 0,
             'training_count' => $trainingCount,
+            'test_count' => $testCount,
             'prediction_count' => $prediksiCount,
-            'ready_for_training' => $trainingCount > 0
+            'ready_for_training' => $trainingCount > 0 && $testCount > 0
         ];
     }
 
