@@ -59,20 +59,23 @@ class PrediksiController {
                 'riskDistribution' => $this->model->getRiskDistributionData(),
                 'accuracyTrend' => $this->model->getAccuracyTrendData(),
                 'topRiskPenyulang' => $this->model->getTopRiskPenyulang(5),
-                'overfittingCheck' => ['overfitting' => false],
-                'modelHealth' => ['health_score' => 85, 'status' => 'GOOD', 'issues' => []]
+                'overfittingCheck' => $this->model->detectOverfitting(),
+                'modelHealth' => $this->model->getModelHealthStatus()
             ];
         } catch (Exception $e) {
             return [
                 'statistics' => [
                     'total_prediksi' => 0, 'tinggi_count' => 0, 'sedang_count' => 0, 'rendah_count' => 0,
                     'tinggi_percentage' => 0, 'sedang_percentage' => 0, 'rendah_percentage' => 0,
-                    'avg_risk_score' => 0, 'avg_total_kegiatan' => 0, 'last_k_value' => 3
+                    'avg_total_kegiatan' => 0, 'last_k_value' => 3
                 ],
-                'prediksiData' => [], 'confusionMatrix' => ['matrix' => [], 'accuracy' => 0],
-                'riskDistribution' => [], 'accuracyTrend' => [], 'topRiskPenyulang' => [],
-                'overfittingCheck' => ['overfitting' => false],
-                'modelHealth' => ['health_score' => 0, 'status' => 'ERROR', 'issues' => []]
+                'prediksiData' => [], 
+                'confusionMatrix' => ['matrix' => [], 'accuracy' => 0],
+                'riskDistribution' => [], 
+                'accuracyTrend' => [], 
+                'topRiskPenyulang' => [],
+                'overfittingCheck' => ['overfitting' => false, 'message' => 'Data tidak tersedia'],
+                'modelHealth' => ['health_score' => 0, 'status' => 'ERROR', 'issues' => ['Data tidak tersedia']]
             ];
         }
     }
