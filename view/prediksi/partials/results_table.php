@@ -10,6 +10,9 @@
                     </h5>
                     <?php if (!empty($data['prediksiData'])): ?>
                         <div class="d-flex gap-2">
+                            <button class="btn btn-outline-success btn-sm" onclick="exportToPDF()">
+                                <i class="mdi mdi-file-pdf-box me-1"></i> Preview PDF
+                            </button>
                             <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
                                 <i class="mdi mdi-refresh"></i>
                             </button>
@@ -42,7 +45,7 @@
                     <table class="table table-hover align-middle" id="table-prediksi">
                         <thead class="table-light">
                             <tr>
-                                <th class="ps-3"><i class="mdi mdi-pound"></i> ID</th>
+                                <th class="ps-3"><i class="mdi mdi-pound"></i> No</th>
                                 <th><i class="mdi mdi-factory"></i> Nama Penyulang</th>
                                 <th><i class="mdi mdi-alert"></i> Tingkat Risiko</th>
                                 <th><i class="mdi mdi-chart-line"></i> Nilai Risiko</th>
@@ -54,9 +57,9 @@
                         </thead>
                         <tbody>
                             <?php if (!empty($data['prediksiData'])): ?>
-                                <?php foreach ($data['prediksiData'] as $row): ?>
-                                    <tr class="border-top">
-                                        <td class="ps-3 small"><?php echo htmlspecialchars($row['id_prediksi']); ?></td>
+                                <?php $no = 1; foreach ($data['prediksiData'] as $row): ?>
+                                    <tr>
+                                        <td class="ps-3 small text-center"><?php echo $no++; ?></td>
                                         <td>
                                             <strong class="text-dark"><?php echo htmlspecialchars($row['nama_penyulang']); ?></strong>
                                         </td>
@@ -99,10 +102,11 @@
                                         <td>
                                             <button type="button" class="btn btn-sm btn-outline-info" 
                                                 onclick="showSuggestion(
-                                                    '<?php echo htmlspecialchars($row['nama_penyulang']); ?>', 
-                                                    '<?php echo htmlspecialchars($row['saran_perbaikan']); ?>',
-                                                    '<?php echo htmlspecialchars($row['tingkat_risiko']); ?>'
-                                                )">
+                                                    '<?php echo htmlspecialchars($row['nama_penyulang'], ENT_QUOTES); ?>', 
+                                                    '<?php echo htmlspecialchars($row['saran_perbaikan'], ENT_QUOTES); ?>',
+                                                    '<?php echo htmlspecialchars($row['tingkat_risiko'], ENT_QUOTES); ?>'
+                                                )"
+                                                data-saran="<?php echo htmlspecialchars($row['saran_perbaikan'], ENT_QUOTES); ?>">
                                                 <i class="mdi mdi-eye me-1"></i> Lihat
                                             </button>
                                         </td>
@@ -189,3 +193,312 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="suggestionModal" tabindex="-1" aria-labelledby="suggestionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="suggestionModalLabel">
+                    <i class="mdi mdi-lightbulb text-warning me-2"></i>
+                    Saran Perbaikan
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nama Penyulang:</label>
+                    <p id="modal-penyulang" class="mb-2"></p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tingkat Risiko:</label>
+                    <p id="modal-risiko" class="mb-2"></p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Saran Perbaikan:</label>
+                    <div id="modal-saran" class="border rounded p-3 bg-light"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+const statistikData = {
+    avgRiskScore: <?php echo isset($data['statistics']['avg_risk_score']) ? $data['statistics']['avg_risk_score'] : 0; ?>,
+    avgTotalKegiatan: <?php echo isset($data['statistics']['avg_total_kegiatan']) ? $data['statistics']['avg_total_kegiatan'] : 0; ?>,
+    tinggiCount: <?php echo isset($data['statistics']['tinggi_count']) ? $data['statistics']['tinggi_count'] : 0; ?>,
+    sedangCount: <?php echo isset($data['statistics']['sedang_count']) ? $data['statistics']['sedang_count'] : 0; ?>,
+    rendahCount: <?php echo isset($data['statistics']['rendah_count']) ? $data['statistics']['rendah_count'] : 0; ?>,
+    tinggiPercentage: <?php echo isset($data['statistics']['tinggi_percentage']) ? $data['statistics']['tinggi_percentage'] : 0; ?>,
+    sedangPercentage: <?php echo isset($data['statistics']['sedang_percentage']) ? $data['statistics']['sedang_percentage'] : 0; ?>,
+    rendahPercentage: <?php echo isset($data['statistics']['rendah_percentage']) ? $data['statistics']['rendah_percentage'] : 0; ?>
+};
+
+function showSuggestion(namaPenyulang, saranPerbaikan, tingkatRisiko) {
+    document.getElementById('modal-penyulang').textContent = namaPenyulang;
+    
+    const risikoElement = document.getElementById('modal-risiko');
+    let badgeClass = '';
+    switch (tingkatRisiko.toUpperCase()) {
+        case 'TINGGI':
+            badgeClass = 'bg-danger';
+            break;
+        case 'SEDANG':
+            badgeClass = 'bg-warning text-dark';
+            break;
+        default:
+            badgeClass = 'bg-success';
+    }
+    risikoElement.innerHTML = `<span class="badge ${badgeClass} px-2 py-1">${tingkatRisiko}</span>`;
+    
+    const saranElement = document.getElementById('modal-saran');
+    const saranList = saranPerbaikan.split(';').map(saran => saran.trim());
+    let saranHTML = '<ul class="mb-0">';
+    saranList.forEach(saran => {
+        if (saran) {
+            saranHTML += `<li class="mb-2">${saran}</li>`;
+        }
+    });
+    saranHTML += '</ul>';
+    saranElement.innerHTML = saranHTML;
+    
+    const modal = new bootstrap.Modal(document.getElementById('suggestionModal'));
+    modal.show();
+}
+
+function refreshData() {
+    location.reload();
+}
+
+document.getElementById('searchTable')?.addEventListener('input', function() {
+    filterTable();
+});
+
+document.getElementById('filterRisiko')?.addEventListener('change', function() {
+    filterTable();
+});
+
+function filterTable() {
+    const searchInput = document.getElementById('searchTable');
+    const filterSelect = document.getElementById('filterRisiko');
+    
+    if (!searchInput || !filterSelect) return;
+    
+    const searchValue = searchInput.value.toLowerCase();
+    const filterValue = filterSelect.value;
+    const table = document.getElementById('table-prediksi');
+    const tbody = table.getElementsByTagName('tbody')[0];
+    const rows = tbody.getElementsByTagName('tr');
+    
+    let visibleCount = 0;
+    
+    for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName('td');
+        if (cells.length === 1) continue;
+        
+        const penyulang = cells[1].textContent.toLowerCase();
+        const risiko = cells[2].textContent;
+        
+        const matchSearch = penyulang.includes(searchValue);
+        const matchFilter = !filterValue || risiko.includes(filterValue);
+        
+        if (matchSearch && matchFilter) {
+            rows[i].style.display = '';
+            visibleCount++;
+        } else {
+            rows[i].style.display = 'none';
+        }
+    }
+    
+    const countBadge = document.querySelector('.badge.bg-info');
+    if (countBadge) {
+        countBadge.textContent = `${visibleCount} data`;
+    }
+}
+
+function exportToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a3');
+    const pageWidth = 420;
+    const pageHeight = 297;
+    
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LAPORAN HASIL PREDIKSI RISIKO KNN', pageWidth/2, 25, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const tanggalCetak = new Date().toLocaleDateString('id-ID', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    const waktuCetak = new Date().toLocaleTimeString('id-ID');
+    
+    doc.text(`Tanggal Cetak: ${tanggalCetak}`, 20, 40);
+    doc.text(`Waktu Cetak: ${waktuCetak}`, 20, 45);
+    doc.text(`Format: Landscape Detail`, 20, 50);
+    
+    doc.line(20, 55, pageWidth - 20, 55);
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RINGKASAN STATISTIK', 20, 68);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Data Prediksi: ${statistikData.tinggiCount + statistikData.sedangCount + statistikData.rendahCount}`, 20, 78);
+    doc.text(`Rata-rata Risk Score: ${statistikData.avgRiskScore}`, 20, 83);
+    doc.text(`Rata-rata Total Kegiatan: ${statistikData.avgTotalKegiatan}`, 20, 88);
+    
+    doc.text(`Distribusi Risiko:`, 250, 78);
+    doc.text(`• Tinggi: ${statistikData.tinggiCount} data (${statistikData.tinggiPercentage}%)`, 250, 83);
+    doc.text(`• Sedang: ${statistikData.sedangCount} data (${statistikData.sedangPercentage}%)`, 250, 88);
+    doc.text(`• Rendah: ${statistikData.rendahCount} data (${statistikData.rendahPercentage}%)`, 250, 93);
+    
+    doc.line(20, 98, pageWidth - 20, 98);
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DATA PREDIKSI DETAIL', 20, 111);
+    
+    const table = document.getElementById('table-prediksi');
+    const tbody = table.getElementsByTagName('tbody')[0];
+    const rows = tbody.getElementsByTagName('tr');
+    
+    const tableData = [];
+    const visibleRows = Array.from(rows).filter(row => 
+        row.style.display !== 'none' && 
+        row.getElementsByTagName('td').length > 1
+    );
+    
+    let nomor = 1;
+    visibleRows.forEach(row => {
+        const cells = row.getElementsByTagName('td');
+        if (cells.length > 1) {
+            const tingkatRisiko = cells[2].textContent.replace(/\s+/g, ' ').trim();
+            const button = cells[6].querySelector('button');
+            let saran = '';
+            if (button) {
+                saran = button.getAttribute('data-saran') || '';
+            }
+            
+            tableData.push([
+                nomor++,
+                cells[1].textContent.trim(),
+                tingkatRisiko,
+                cells[3].textContent.trim(),
+                cells[4].textContent.trim(),
+                cells[5].textContent.trim(),
+                saran,
+                cells[7].textContent.trim()
+            ]);
+        }
+    });
+    
+    doc.autoTable({
+        startY: 120,
+        head: [['No', 'Nama Penyulang', 'Tingkat Risiko', 'Nilai Risiko', 'Total Kegiatan', 'K Value', 'Saran Perbaikan', 'Tanggal Prediksi']],
+        body: tableData,
+        styles: {
+            fontSize: 9,
+            cellPadding: 4,
+            overflow: 'linebreak',
+            cellWidth: 'wrap',
+            valign: 'middle',
+            lineColor: [206, 212, 218],
+            lineWidth: 0.2
+        },
+        headStyles: {
+            fillColor: [41, 128, 185],
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 9,
+            halign: 'center'
+        },
+        columnStyles: {
+            0: { 
+                cellWidth: 20, 
+                halign: 'center',
+                fontSize: 9
+            },
+            1: { 
+                cellWidth: 60,
+                fontStyle: 'bold',
+                fontSize: 9
+            },
+            2: { 
+                cellWidth: 35,
+                halign: 'center',
+                fontSize: 9
+            },
+            3: { 
+                cellWidth: 30,
+                halign: 'center',
+                fontSize: 9
+            },
+            4: { 
+                cellWidth: 35,
+                halign: 'center',
+                fontSize: 9
+            },
+            5: { 
+                cellWidth: 25,
+                halign: 'center',
+                fontSize: 9
+            },
+            6: { 
+                cellWidth: 140,
+                overflow: 'linebreak',
+                cellPadding: 5,
+                fontSize: 8,
+                valign: 'top'
+            },
+            7: { 
+                cellWidth: 35,
+                halign: 'center',
+                fontSize: 8
+            }
+        },
+        alternateRowStyles: {
+            fillColor: [248, 249, 250]
+        },
+        tableLineColor: [206, 212, 218],
+        tableLineWidth: 0.3,
+        margin: { left: 20, right: 20 },
+        didParseCell: function(data) {
+            if (data.column.index === 2) {
+                if (data.cell.text[0] && data.cell.text[0].includes('TINGGI')) {
+                    data.cell.styles.fillColor = [248, 215, 218];
+                    data.cell.styles.textColor = [114, 28, 36];
+                } else if (data.cell.text[0] && data.cell.text[0].includes('SEDANG')) {
+                    data.cell.styles.fillColor = [255, 243, 205];
+                    data.cell.styles.textColor = [133, 77, 14];
+                } else if (data.cell.text[0] && data.cell.text[0].includes('RENDAH')) {
+                    data.cell.styles.fillColor = [212, 237, 218];
+                    data.cell.styles.textColor = [21, 87, 36];
+                }
+            }
+        }
+    });
+    
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Halaman ${i} dari ${pageCount}`, pageWidth - 30, pageHeight - 10, { align: 'right' });
+        doc.text('Generated by Sistem Prediksi Risiko KNN', 20, pageHeight - 10);
+        doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 20, pageHeight - 5);
+    }
+    
+    window.open(doc.output('bloburl'), '_blank');
+}
+</script>
