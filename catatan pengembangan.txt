@@ -1,0 +1,97 @@
+Tabel "data_pemeliharaan"
+id_data_pemeliharaan
+tanggal (bulan dan tahun)
+nama_objek (gardu atau sutm)
+id_sub_kategori (dari tabel gardu dan sutm)
+
+Tabel "gardu"
+id_gardu
+nama_penyulang
+t1_inspeksi
+t1_realisasi
+t2_inspeksi
+t2_realisasi
+pengukuran
+pergantian_arrester
+pergantian_fco
+relokasi_gardu
+pembangunan_gardu_siapan
+penyimbang_beban_gardu
+pemecahan_beban_gardu
+perubahan_tap_charger_trafo
+pergantian_box
+pergantian_opstic
+perbaikan_grounding
+accesoris_gardu
+pergantian_kabel_isolasi
+pemasangan_cover_isolasi
+pemasangan_penghalang_panjat
+alat_ultrasonik
+
+
+Tabel "sutm"
+id_sutm
+nama_penyulang
+t1_inspeksi
+t1_realisasi
+t2_inspeksi
+t2_realisasi
+pangkas_kms
+pangkas_batang
+tebang
+row_lain
+pin_isolator
+suspension_isolator
+traves_dan_armtie
+tiang
+accesoris_sutm
+arrester_sutm
+fco_sutm
+grounding_sutm
+perbaikan_andong_kendor
+kawat_terburai
+jamperan_sutm
+skur
+ganti_kabel_isolasi
+pemasangan_cover_isolasi
+pemasangan_penghalang_panjang
+alat_ultrasonik
+
+
+CREATE TABLE data_pemeliharaan (
+    id_data_pemeliharaan INT AUTO_INCREMENT PRIMARY KEY,
+    tanggal DATE NOT NULL, -- hanya tahun dan bulan akan diambil dari sini
+    nama_objek ENUM('gardu', 'sutm') NOT NULL,
+    id_sub_kategori INT NOT NULL, -- id_gardu atau id_sutm tergantung nama_objek
+
+    -- Relasi fleksibel ke dua tabel berbeda (tidak enforced dengan foreign key karena variasi)
+    INDEX (id_sub_kategori),
+    INDEX (nama_objek)
+);
+
+
+CREATE TABLE gardu (
+    id_gardu INT AUTO_INCREMENT PRIMARY KEY,
+    nama_penyulang VARCHAR(100) NOT NULL,
+    t1_inspeksi INT DEFAULT 0,
+    t1_realisasi INT DEFAULT 0,
+    t2_inspeksi INT DEFAULT 0,
+    t2_realisasi INT DEFAULT 0,
+    pengukuran INT DEFAULT 0,
+    pergantian_arrester INT DEFAULT 0,
+    pergantian_fco INT DEFAULT 0,
+    relokasi_gardu INT DEFAULT 0,
+    pembangunan_gardu_siapan INT DEFAULT 0,
+    penyimbang_beban_gardu INT DEFAULT 0,
+    pemecahan_beban_gardu INT DEFAULT 0,
+    perubahan_tap_charger_trafo INT DEFAULT 0,
+    pergantian_box INT DEFAULT 0,
+    pergantian_opstic INT DEFAULT 0,
+    perbaikan_grounding INT DEFAULT 0,
+    accesoris_gardu INT DEFAULT 0,
+    pergantian_kabel_isolasi INT DEFAULT 0,
+    pemasangan_cover_isolasi INT DEFAULT 0,
+    pemasangan_penghalang_panjat INT DEFAULT 0,
+    alat_ultrasonik INT DEFAULT 0
+);
+
