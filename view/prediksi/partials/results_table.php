@@ -329,10 +329,19 @@ function exportToPDF() {
         const cells = row.getElementsByTagName('td');
         if (cells.length > 1) {
             const tingkatRisiko = cells[2].textContent.replace(/\s+/g, ' ').trim();
-            const button = cells[6].querySelector('button');
+            
             let saran = '';
-            if (button) {
-                saran = button.getAttribute('data-saran') || '';
+            const saranCell = cells[6];
+            if (saranCell) {
+                const saranDivs = saranCell.querySelectorAll('div');
+                const saranArray = [];
+                saranDivs.forEach(div => {
+                    const text = div.textContent.trim();
+                    if (text && text.startsWith('•')) {
+                        saranArray.push(text.substring(1).trim());
+                    }
+                });
+                saran = saranArray.join('; ');
             }
             
             tableData.push([
