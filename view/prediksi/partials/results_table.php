@@ -1,3 +1,7 @@
+<?php
+include_once 'koneksi.php';
+?>
+
 <div class="row">
     <div class="col-12">
         <div class="card shadow-sm">
@@ -100,15 +104,17 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <button type="button" class="btn btn-sm btn-outline-info" 
-                                                onclick="showSuggestion(
-                                                    '<?php echo htmlspecialchars($row['nama_penyulang'], ENT_QUOTES); ?>', 
-                                                    '<?php echo htmlspecialchars($row['saran_perbaikan'], ENT_QUOTES); ?>',
-                                                    '<?php echo htmlspecialchars($row['tingkat_risiko'], ENT_QUOTES); ?>'
-                                                )"
-                                                data-saran="<?php echo htmlspecialchars($row['saran_perbaikan'], ENT_QUOTES); ?>">
-                                                <i class="mdi mdi-eye me-1"></i> Lihat
-                                            </button>
+                                            <div class="small">
+                                                <?php 
+                                                $saranList = explode(';', $row['saran_perbaikan']);
+                                                foreach ($saranList as $saran) {
+                                                    $saran = trim($saran);
+                                                    if (!empty($saran)) {
+                                                        echo '<div class="mb-1">• ' . htmlspecialchars($saran) . '</div>';
+                                                    }
+                                                }
+                                                ?>
+                                            </div>
                                         </td>
                                         <td class="pe-3">
                                             <small class="text-muted"><?php echo date('d/m/Y H:i', strtotime($row['tanggal_prediksi'])); ?></small>
@@ -194,36 +200,7 @@
     </div>
 </div>
 
-<div class="modal fade" id="suggestionModal" tabindex="-1" aria-labelledby="suggestionModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="suggestionModalLabel">
-                    <i class="mdi mdi-lightbulb text-warning me-2"></i>
-                    Saran Perbaikan
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Nama Penyulang:</label>
-                    <p id="modal-penyulang" class="mb-2"></p>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Tingkat Risiko:</label>
-                    <p id="modal-risiko" class="mb-2"></p>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Saran Perbaikan:</label>
-                    <div id="modal-saran" class="border rounded p-3 bg-light"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -239,38 +216,6 @@ const statistikData = {
     sedangPercentage: <?php echo isset($data['statistics']['sedang_percentage']) ? $data['statistics']['sedang_percentage'] : 0; ?>,
     rendahPercentage: <?php echo isset($data['statistics']['rendah_percentage']) ? $data['statistics']['rendah_percentage'] : 0; ?>
 };
-
-function showSuggestion(namaPenyulang, saranPerbaikan, tingkatRisiko) {
-    document.getElementById('modal-penyulang').textContent = namaPenyulang;
-    
-    const risikoElement = document.getElementById('modal-risiko');
-    let badgeClass = '';
-    switch (tingkatRisiko.toUpperCase()) {
-        case 'TINGGI':
-            badgeClass = 'bg-danger';
-            break;
-        case 'SEDANG':
-            badgeClass = 'bg-warning text-dark';
-            break;
-        default:
-            badgeClass = 'bg-success';
-    }
-    risikoElement.innerHTML = `<span class="badge ${badgeClass} px-2 py-1">${tingkatRisiko}</span>`;
-    
-    const saranElement = document.getElementById('modal-saran');
-    const saranList = saranPerbaikan.split(';').map(saran => saran.trim());
-    let saranHTML = '<ul class="mb-0">';
-    saranList.forEach(saran => {
-        if (saran) {
-            saranHTML += `<li class="mb-2">${saran}</li>`;
-        }
-    });
-    saranHTML += '</ul>';
-    saranElement.innerHTML = saranHTML;
-    
-    const modal = new bootstrap.Modal(document.getElementById('suggestionModal'));
-    modal.show();
-}
 
 function refreshData() {
     location.reload();

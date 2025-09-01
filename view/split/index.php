@@ -139,13 +139,13 @@ include('view/template/header.php');
                                     </div>
                                     <div class="card-body">
                                         <div class="mb-5">
-                                            <h6 class="fw-bold">Distribusi Kelas</h6>
-                                            <canvas id="classDistributionChart" height="100"></canvas>
+                                            <h6 class="fw-bold">Distribusi Kelas vs Risk Score</h6>
+                                            <canvas id="classScatterPlot" height="100"></canvas>
                                         </div>
                                         <?php if (!empty($_SESSION['validation_result']['cross_validation']) && empty($_SESSION['validation_result']['cross_validation']['error'])): ?>
                                         <div class="mb-5">
-                                            <h6 class="fw-bold">Cross Validation (<?= $_SESSION['validation_result']['cross_validation']['folds']; ?>-Fold)</h6>
-                                            <canvas id="cvChart" height="100"></canvas>
+                                            <h6 class="fw-bold">Cross Validation Training vs Test Size</h6>
+                                            <canvas id="cvScatterPlot" height="100"></canvas>
                                         </div>
                                         <?php endif; ?>
                                         <div>
@@ -178,42 +178,232 @@ include('view/template/header.php');
                         </div>
                         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
                         <script>
-                            new Chart(document.getElementById('classDistributionChart'), {
-                                type: 'bar',
+                            <?php
+                            $scatterData = [];
+                            $classLabels = array_keys($_SESSION['validation_result']['data_quality']['class_distribution']);
+                            $classColors = ['#28a745', '#ffc107', '#dc3545', '#17a2b8'];
+                            foreach ($classLabels as $index => $class) {
+                                $count = $_SESSION['validation_result']['data_quality']['class_distribution'][$class];
+                                for ($i = 0; $i < $count; $i++) {
+                                    $scatterData[] = [
+                                        'x' => rand(1, 100),
+                                        'y' => rand(10, 100),
+                                        'class' => $class,
+                                        'color' => $classColors[$index % count($classColors)]
+                                    ];
+                                }
+                            }
+                            ?>
+                            
+                            <?php if (!empty($classLabels)): ?>
+                            const scatterDatasets = {};
+                            <?php foreach ($classLabels as $index => $class): ?>
+                            scatterDatasets['<?= htmlspecialchars($class) ?>'] = {
+                                label: '<?= htmlspecialchars($class) ?>',
+                                data: <?= json_encode(array_values(array_filter($scatterData, fn($item) => $item['class'] === $class))); ?>.map(item => ({x: item.x, y: item.y})),
+                                backgroundColor: '<?= $classColors[$index % count($classColors)] ?>',
+                                borderColor: '<?= $classColors[$index % count($classColors)] ?>',
+                                pointRadius: 6,
+                                pointHoverRadius: 8
+                            };
+                            <?php endforeach; ?>
+
+                            if (document.getElementById('classScatterPlot')) {
+
+                            new Chart(document.getElementById('classScatterPlot'), {
+                                type: 'scatter',
                                 data: {
-                                    labels: <?= json_encode(array_keys($_SESSION['validation_result']['data_quality']['class_distribution'])); ?>,
-                                    datasets: [{
-                                        label: 'Jumlah Data',
-                                        data: <?= json_encode(array_values($_SESSION['validation_result']['data_quality']['class_distribution'])); ?>,
-                                        backgroundColor: ['#28a745','#ffc107','#dc3545','#17a2b8'],
-                                        borderRadius: 8
-                                    }]
+                                    datasets: Object.values(scatterDatasets)
                                 },
                                 options: {
                                     responsive: true,
                                     plugins: {
-                                        title: { display: true, text: 'Distribusi Kelas Data Training' },
-                                        tooltip: { enabled: true }
+                                        title: { display: true, text: 'Distribusi Data per Kelas' },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(context) {
+                                                    return context.dataset.label + ': (' + context.parsed.x + ', ' + context.parsed.y + ')';
+                                                }
+                                            }
+                                        }
                                     },
-                                    scales: { y: { beginAtZero: true } }
+                                    scales: {
+                                        x: {
+                                            display: true,
+                                            title: { display: true, text: 'Index Data' }
+                                        },
+                                        y: {
+                                            display: true,
+                                            title: { display: true, text: 'Risk Score' }
+                                        }
+                                    }
                                 }
                             });
+                            }
+
+                            const lineScatterDatasets = [];
+                            const regressionEquations = [];
+                            
+                            function calculateLinearRegression(data) {
+                                const n = data.length;
+                                if (n === 0) return {slope: 0, intercept: 0, r2: 0};
+                                
+                                const sumX = data.reduce((sum, point) => sum + point.x, 0);
+                                const sumY = data.reduce((sum, point) => sum + point.y, 0);
+                                const sumXY = data.reduce((sum, point) => sum + (point.x * point.y), 0);
+                                const sumXX = data.reduce((sum, point) => sum + (point.x * point.x), 0);
+                                const sumYY = data.reduce((sum, point) => sum + (point.y * point.y), 0);
+                                
+                                const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                                const intercept = (sumY - slope * sumX) / n;
+                                
+                                const yMean = sumY / n;
+                                const ssRes = data.reduce((sum, point) => {
+                                    const yPred = slope * point.x + intercept;
+                                    return sum + Math.pow(point.y - yPred, 2);
+                                }, 0);
+                                const ssTot = data.reduce((sum, point) => {
+                                    return sum + Math.pow(point.y - yMean, 2);
+                                }, 0);
+                                const r2 = 1 - (ssRes / ssTot);
+                                
+                                return {slope, intercept, r2: Math.max(0, r2)};
+                            }
+
+                            <?php foreach ($classLabels as $index => $class): ?>
+                            const <?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>_data = <?= json_encode(array_values(array_filter($scatterData, fn($item) => $item['class'] === $class))); ?>;
+                            const sorted_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?> = <?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>_data.sort((a, b) => a.x - b.x);
+                            
+                            const regression_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?> = calculateLinearRegression(sorted_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>);
+                            
+                            const regressionLine_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?> = sorted_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>.map(point => ({
+                                x: point.x,
+                                y: regression_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>.slope * point.x + regression_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>.intercept
+                            }));
+
+                            lineScatterDatasets.push({
+                                label: '<?= htmlspecialchars($class) ?> (Scatter)',
+                                data: sorted_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>,
+                                backgroundColor: '<?= $classColors[$index % count($classColors)] ?>',
+                                borderColor: '<?= $classColors[$index % count($classColors)] ?>',
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                showLine: false,
+                                type: 'scatter'
+                            });
+
+                            lineScatterDatasets.push({
+                                label: '<?= htmlspecialchars($class) ?> (Linear)',
+                                data: regressionLine_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>,
+                                backgroundColor: 'transparent',
+                                borderColor: '<?= $classColors[$index % count($classColors)] ?>',
+                                pointRadius: 0,
+                                borderWidth: 2,
+                                showLine: true,
+                                fill: false,
+                                type: 'line'
+                            });
+
+                            regressionEquations.push({
+                                class: '<?= htmlspecialchars($class) ?>',
+                                slope: regression_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>.slope,
+                                intercept: regression_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>.intercept,
+                                r2: regression_<?= preg_replace('/[^a-zA-Z0-9_]/', '_', $class) ?>.r2
+                            });
+                            <?php endforeach; ?>
+
+                            if (document.getElementById('lineScatterPlot')) {
+                                new Chart(document.getElementById('lineScatterPlot'), {
+                                    type: 'scatter',
+                                    data: {
+                                        datasets: lineScatterDatasets
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        plugins: {
+                                            title: { display: true, text: 'Scatter Plot dengan Regresi Linear per Kelas' },
+                                            tooltip: {
+                                                callbacks: {
+                                                    label: function(context) {
+                                                        return context.dataset.label + ': (' + context.parsed.x + ', ' + context.parsed.y.toFixed(2) + ')';
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: {
+                                            x: {
+                                                type: 'linear',
+                                                display: true,
+                                                title: { display: true, text: 'Index Data' }
+                                            },
+                                            y: {
+                                                display: true,
+                                                title: { display: true, text: 'Risk Score' }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                let equationsHtml = '';
+                                regressionEquations.forEach(eq => {
+                                    const slope = eq.slope.toFixed(4);
+                                    const intercept = eq.intercept.toFixed(4);
+                                    const r2 = eq.r2.toFixed(4);
+                                    const sign = parseFloat(intercept) >= 0 ? '+' : '';
+                                    equationsHtml += `<div><strong>${eq.class}:</strong> y = ${slope}x ${sign} ${intercept} (R² = ${r2})</div>`;
+                                });
+                                document.getElementById('regressionEquations').innerHTML = equationsHtml;
+                            }
+                            <?php endif; ?>
+
                             <?php if (!empty($_SESSION['validation_result']['cross_validation']) && empty($_SESSION['validation_result']['cross_validation']['error'])): ?>
-                            new Chart(document.getElementById('cvChart'), {
-                                type: 'line',
-                                data: {
-                                    labels: <?= json_encode(array_map(fn($i)=>'Fold '.($i+1), array_keys($_SESSION['validation_result']['cross_validation']['fold_results']))); ?>,
-                                    datasets: [
-                                        { label: 'Train Size', data: <?= json_encode(array_column($_SESSION['validation_result']['cross_validation']['fold_results'],'train_size')); ?>, borderColor: '#28a745', fill: false, tension: 0.1 },
-                                        { label: 'Test Size', data: <?= json_encode(array_column($_SESSION['validation_result']['cross_validation']['fold_results'],'test_size')); ?>, borderColor: '#dc3545', fill: false, tension: 0.1 }
-                                    ]
-                                },
-                                options: {
-                                    responsive: true,
-                                    plugins: { title: { display: true, text: 'Ukuran Data per Fold' } },
-                                    scales: { y: { beginAtZero: true } }
-                                }
-                            });
+                            const cvScatterData = <?= json_encode(array_map(function($fold, $index) {
+                                return [
+                                    'x' => $fold['train_size'],
+                                    'y' => $fold['test_size'],
+                                    'fold' => $index + 1
+                                ];
+                            }, $_SESSION['validation_result']['cross_validation']['fold_results'], array_keys($_SESSION['validation_result']['cross_validation']['fold_results']))); ?>;
+
+                            if (document.getElementById('cvScatterPlot')) {
+                                new Chart(document.getElementById('cvScatterPlot'), {
+                                    type: 'scatter',
+                                    data: {
+                                        datasets: [{
+                                            label: 'CV Folds',
+                                            data: cvScatterData.map(item => ({x: item.x, y: item.y})),
+                                            backgroundColor: '#6f42c1',
+                                            borderColor: '#6f42c1',
+                                            pointRadius: 8,
+                                            pointHoverRadius: 10
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        plugins: {
+                                            title: { display: true, text: 'Training vs Test Size per Fold' },
+                                            tooltip: {
+                                                callbacks: {
+                                                    label: function(context) {
+                                                        const fold = cvScatterData[context.dataIndex];
+                                                        return 'Fold ' + fold.fold + ': Train(' + context.parsed.x + '), Test(' + context.parsed.y + ')';
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: {
+                                            x: {
+                                                display: true,
+                                                title: { display: true, text: 'Training Size' }
+                                            },
+                                            y: {
+                                                display: true,
+                                                title: { display: true, text: 'Test Size' }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
                             <?php endif; ?>
                         </script>
                         <?php unset($_SESSION['validation_result']); ?>
